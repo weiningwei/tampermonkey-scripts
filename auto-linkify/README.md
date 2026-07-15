@@ -15,7 +15,8 @@
 1. 安装浏览器油猴扩展（[Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)）。
 2. 点击扩展图标 → 「新建脚本」，将本仓库 `auto-linkify/auto-linkify.user.js` 的内容粘贴保存；
    或直接访问该 `.user.js` 文件地址，油猴会自动提示安装。
-3. 刷新网页即可生效。
+3. 也可从 GreasyFork 一键安装：<https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5>。
+4. 刷新网页即可生效。
 
 ## 适用范围
 
