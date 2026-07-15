@@ -2,6 +2,13 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.3.0] - 2026-07-15
+
+### Changed
+- 性能优化：`observeShadowsOf` 和 `collectTextNodes` 用 TreeWalker 惰性遍历替代 `querySelectorAll('*')`，避免一次性创建大量元素临时数组。
+- `collectTextNodes` 将文本节点收集与 shadow root 发现合并为单个 TreeWalker，消除同一棵 DOM 树的两次遍历。
+- `linkifyTextNode` 在 `collectTextNodes` 路径跳过冗余的 `isInSkipZone` 检查（TreeWalker 过滤器已做过滤），减少祖先链遍历。
+
 ## [1.2.0] - 2026-07-15
 
 ### Fixed

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.2.0
+// @version      1.3.0
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
