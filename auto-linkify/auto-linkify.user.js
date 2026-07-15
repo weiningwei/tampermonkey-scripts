@@ -64,10 +64,10 @@
   }
 
   // 处理一个文本节点：将其中的匹配片段替换为链接
-  function linkifyTextNode(textNode) {
+  function linkifyTextNode(textNode, skipCheck = false) {
     if (processed.has(textNode)) return;
     if (!textNode.parentNode) return;
-    if (isInSkipZone(textNode)) {
+    if (!skipCheck && isInSkipZone(textNode)) {
       processed.add(textNode);
       return;
     }
@@ -146,25 +146,32 @@
 
   // 收集 root 子树内的文本节点；TreeWalker 不跨越 shadow 边界，需手动递归
   function collectTextNodes(root, out) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (processed.has(node)) return NodeFilter.FILTER_REJECT;
-        if (isInSkipZone(node)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+      {
+        acceptNode(node) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            if (processed.has(node)) return NodeFilter.FILTER_REJECT;
+            if (isInSkipZone(node)) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+          return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+        }
+      }
+    );
     let n;
-    while ((n = walker.nextNode())) out.push(n);
+    while ((n = walker.nextNode())) {
+      if (n.nodeType === Node.TEXT_NODE) {
+        out.push(n);
+      } else if (n.shadowRoot) {
+        collectTextNodes(n.shadowRoot, out);
+      }
+    }
 
-    // 手动进入本节点及其后代拥有的 shadow root（含嵌套）
+    // 根节点本身的 shadow root（TreeWalker 不遍历根节点）
     if (root.nodeType === Node.ELEMENT_NODE && root.shadowRoot) {
       collectTextNodes(root.shadowRoot, out);
-    }
-    if (root.nodeType === Node.ELEMENT_NODE || root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-      const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
-      for (const el of els) {
-        if (el.shadowRoot) collectTextNodes(el.shadowRoot, out);
-      }
     }
   }
 
@@ -173,7 +180,7 @@
     if (!root) return;
     const nodes = [];
     collectTextNodes(root, nodes);
-    for (const node of nodes) linkifyTextNode(node);
+    for (const node of nodes) linkifyTextNode(node, true);
   }
 
   /* --------------------------- 动态内容处理 --------------------------- */
@@ -187,12 +194,15 @@
   // 观察 root 子树内所有 shadow root（含嵌套），使其内部变动也能被捕捉
   function observeShadowsOf(root) {
     if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
-    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
-    for (const el of els) {
-      if (el.shadowRoot) {
-        observer.observe(el.shadowRoot, { childList: true, characterData: true, subtree: true });
-        observeShadowsOf(el.shadowRoot);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+      acceptNode(node) {
+        return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       }
+    });
+    let el;
+    while ((el = walker.nextNode())) {
+      observer.observe(el.shadowRoot, { childList: true, characterData: true, subtree: true });
+      observeShadowsOf(el.shadowRoot);
     }
   }
 
