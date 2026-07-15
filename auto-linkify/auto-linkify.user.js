@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
@@ -159,17 +159,34 @@
   }
 
   /* --------------------------- 动态内容处理 --------------------------- */
+  // 仅处理发生变动的子树，避免每次都全量扫描整页
+  const pruneRoots = (roots) => {
+    const arr = [...roots].filter((n) => n.isConnected);
+    // 去掉被集合内其他节点包含的子树，避免重复遍历
+    return arr.filter((n) => !arr.some((other) => other !== n && other.contains(n)));
+  };
+
   let timer = null;
+  let pendingRoots = null;
   const observer = new MutationObserver((mutations) => {
-    // 仅关注新增/改动的文本，跳过纯属性变化
-    let needProcess = false;
+    if (!pendingRoots) pendingRoots = new Set();
     for (const mu of mutations) {
-      if (mu.type === 'childList' && mu.addedNodes.length) { needProcess = true; break; }
-      if (mu.type === 'characterData') { needProcess = true; break; }
+      if (mu.type === 'childList') {
+        for (const node of mu.addedNodes) pendingRoots.add(node);
+      } else if (mu.type === 'characterData') {
+        pendingRoots.add(mu.target);
+      }
     }
-    if (!needProcess) return;
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => linkify(document.body), CONFIG.DEBOUNCE_MS);
+    timer = setTimeout(() => {
+      const roots = pendingRoots;
+      pendingRoots = null;
+      timer = null;
+      for (const root of pruneRoots(roots)) {
+        if (root.nodeType === Node.TEXT_NODE) linkifyTextNode(root);
+        else linkify(root);
+      }
+    }, CONFIG.DEBOUNCE_MS);
   });
 
   /* ------------------------------- 启动 ------------------------------- */
