@@ -8,8 +8,6 @@
 // @run-at      document-idle
 // @grant        none
 // @license     MIT
-// @downloadURL  https://raw.githubusercontent.com/weiningwei/tampermonkey-scripts/main/auto-linkify/auto-linkify.user.js
-// @updateURL    https://raw.githubusercontent.com/weiningwei/tampermonkey-scripts/main/auto-linkify/auto-linkify.user.js
 // ==/UserScript==
 
 (function () {
