@@ -2,6 +2,12 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.2.0] - 2026-07-15
+
+### Fixed
+- 支持 Shadow DOM：现在能正确识别位于 `<bili-rich-text>` 等自定义元素 shadow root 内的链接（如 B 站评论区）。`linkify` 会遍历节点自身及其后代（含嵌套）的 shadow root，并在初始化与新增元素时把各 shadow root 纳入 `MutationObserver` 观察。
+- 修正 URL 正则过度匹配：字符类排除中日韩文字与全角标点（如全角逗号“，”），避免把 URL 后的中文一并吞入，生成错误链接。
+
 ## [1.1.0] - 2026-07-15
 
 ### Changed

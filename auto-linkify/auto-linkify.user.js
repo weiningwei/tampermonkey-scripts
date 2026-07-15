@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.1.0
+// @version      1.2.0
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
@@ -21,10 +21,12 @@
     DEBOUNCE_MS: 300,
     // 需要被识别为正则的匹配模式；v1 仅处理 http/https 链接。
     // 如需扩展（如邮箱），可在此追加正则，例如：
-    //   /https?:\/\/[^\s<>"']+/gi,
+    //   /https?:\/\/[^\s<>"'\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]+/gi,
     //   /[\w.+-]+@[\w-]+\.[\w.-]+/gi,
+    // 注意：字符类排除了中日韩文字与全角标点（如全角逗号“，”），
+    // 避免把 URL 后面的中文一并吞入，导致生成错误链接。
     PATTERNS: [
-      /https?:\/\/[^\s<>"']+/gi,
+      /https?:\/\/[^\s<>"'\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]+/gi,
     ],
     // 不处理的标签（避免破坏代码块、表单、已有链接等）
     SKIP_TAGS: new Set([
@@ -142,9 +144,8 @@
     processed.add(textNode);
   }
 
-  // 遍历 root 下所有文本节点并处理
-  function linkify(root) {
-    if (!root) return;
+  // 收集 root 子树内的文本节点；TreeWalker 不跨越 shadow 边界，需手动递归
+  function collectTextNodes(root, out) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         if (processed.has(node)) return NodeFilter.FILTER_REJECT;
@@ -152,9 +153,26 @@
         return NodeFilter.FILTER_ACCEPT;
       },
     });
-    const nodes = [];
     let n;
-    while ((n = walker.nextNode())) nodes.push(n);
+    while ((n = walker.nextNode())) out.push(n);
+
+    // 手动进入本节点及其后代拥有的 shadow root（含嵌套）
+    if (root.nodeType === Node.ELEMENT_NODE && root.shadowRoot) {
+      collectTextNodes(root.shadowRoot, out);
+    }
+    if (root.nodeType === Node.ELEMENT_NODE || root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
+      for (const el of els) {
+        if (el.shadowRoot) collectTextNodes(el.shadowRoot, out);
+      }
+    }
+  }
+
+  // 遍历 root 下所有文本节点并处理（含 shadow root 内的文本）
+  function linkify(root) {
+    if (!root) return;
+    const nodes = [];
+    collectTextNodes(root, nodes);
     for (const node of nodes) linkifyTextNode(node);
   }
 
@@ -166,13 +184,28 @@
     return arr.filter((n) => !arr.some((other) => other !== n && other.contains(n)));
   };
 
+  // 观察 root 子树内所有 shadow root（含嵌套），使其内部变动也能被捕捉
+  function observeShadowsOf(root) {
+    if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of els) {
+      if (el.shadowRoot) {
+        observer.observe(el.shadowRoot, { childList: true, characterData: true, subtree: true });
+        observeShadowsOf(el.shadowRoot);
+      }
+    }
+  }
+
   let timer = null;
   let pendingRoots = null;
   const observer = new MutationObserver((mutations) => {
     if (!pendingRoots) pendingRoots = new Set();
     for (const mu of mutations) {
       if (mu.type === 'childList') {
-        for (const node of mu.addedNodes) pendingRoots.add(node);
+        for (const node of mu.addedNodes) {
+          pendingRoots.add(node);
+          if (node.nodeType === Node.ELEMENT_NODE) observeShadowsOf(node);
+        }
       } else if (mu.type === 'characterData') {
         pendingRoots.add(mu.target);
       }
@@ -192,6 +225,7 @@
   /* ------------------------------- 启动 ------------------------------- */
   function init() {
     linkify(document.body);
+    observeShadowsOf(document.body);
     observer.observe(document.body, {
       childList: true,
       characterData: true,
