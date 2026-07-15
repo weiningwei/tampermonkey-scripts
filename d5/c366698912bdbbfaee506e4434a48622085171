@@ -1,0 +1,19 @@
+AGENTS.md
+  s_91b12bbc3c36d5::t_297ee5ede15a04 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "d5c366698912bdbbfaee506e4434a48622085171",
+  "prompts": {},
+  "sessions": {
+    "s_91b12bbc3c36d5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_09a2245a7ffeEi8Uo3aefN2aX2",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
