@@ -1,0 +1,20 @@
+auto-linkify/auto-linkify.user.js
+  s_91b12bbc3c36d5::t_07f57ff230d002 193
+  s_91b12bbc3c36d5::t_a8ef567e2dd732 194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "0e76294209f61999747d134b7140799d32dd1a0f",
+  "prompts": {},
+  "sessions": {
+    "s_91b12bbc3c36d5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_09a2245a7ffeEi8Uo3aefN2aX2",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
