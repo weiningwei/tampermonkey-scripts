@@ -2,6 +2,11 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.4.0] - 2026-07-15
+
+### Added
+- 扩展菜单新增统计命令，显示已转换链接数量和累计转换耗时。使用 `GM_registerMenuCommand` 实现，无需注入页面元素。
+
 ## [1.3.0] - 2026-07-15
 
 ### Changed

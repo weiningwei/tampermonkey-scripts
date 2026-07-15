@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.3.0
+// @version      1.4.0
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at      document-idle
-// @grant        none
+// @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // @license     MIT
 // ==/UserScript==
 
@@ -37,6 +38,12 @@
   /* ------------------------------------------------------------------- */
 
   const processed = new WeakSet();
+
+  // 统计信息
+  const STATS = {
+    count: 0,
+    totalMs: 0,
+  };
 
   // 判断节点是否位于需要跳过的祖先标签内
   function isInSkipZone(node) {
@@ -139,6 +146,7 @@
 
     if (matched) {
       textNode.parentNode.replaceChild(frag, textNode);
+      STATS.count++;
     }
     // 原文本节点已被替换/保留，标记避免重复处理
     processed.add(textNode);
@@ -178,9 +186,12 @@
   // 遍历 root 下所有文本节点并处理（含 shadow root 内的文本）
   function linkify(root) {
     if (!root) return;
+    const t0 = performance.now();
     const nodes = [];
     collectTextNodes(root, nodes);
     for (const node of nodes) linkifyTextNode(node, true);
+    STATS.totalMs += performance.now() - t0;
+    updateMenu();
   }
 
   /* --------------------------- 动态内容处理 --------------------------- */
@@ -225,15 +236,40 @@
       const roots = pendingRoots;
       pendingRoots = null;
       timer = null;
+      const t0 = performance.now();
       for (const root of pruneRoots(roots)) {
         if (root.nodeType === Node.TEXT_NODE) linkifyTextNode(root);
         else linkify(root);
       }
+      STATS.totalMs += performance.now() - t0;
+      updateMenu();
     }, CONFIG.DEBOUNCE_MS);
   });
 
+  /* ----------------------------- 菜单栏统计 -------------------------- */
+  let menuId = null;
+
+  function formatMs(ms) {
+    if (ms < 1) return '<1ms';
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    const sec = Math.floor(ms / 1000);
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m${s}s`;
+  }
+
+  function updateMenu() {
+    if (menuId !== null) GM_unregisterMenuCommand(menuId);
+    const label = `${STATS.count} 个链接 · ${formatMs(STATS.totalMs)}`;
+    menuId = GM_registerMenuCommand(label, () => {
+      alert(`已转换 ${STATS.count} 个链接，累计耗时 ${formatMs(STATS.totalMs)}。`);
+    });
+  }
+
   /* ------------------------------- 启动 ------------------------------- */
   function init() {
+    updateMenu();
     linkify(document.body);
     observeShadowsOf(document.body);
     observer.observe(document.body, {
