@@ -52,6 +52,27 @@ PATTERNS: [
 - 识别基于文本正则，无法理解语义（例如把"网址"两个字变成链接）；只转换字面出现的 URL 文本。
 - 若页面频繁大量变动，防抖间隔 `DEBOUNCE_MS` 可调大以降低开销。
 
+## 测试
+
+项目提供两套测试方案，共 28 个用例覆盖 7 大类：
+
+| 方式 | 文件 | 说明 |
+|------|------|------|
+| 浏览器 | `test.html` | 直接打开，点击按钮检查结果 |
+| 命令行 | `test.js` | `npm install && npm test`，支持 `--verbose` / `--bail` |
+
+### 测试覆盖
+
+| 类别 | 用例数 | 内容 |
+|------|--------|------|
+| 基础 URL 识别 | 3 | HTTP、HTTPS、多 URL |
+| URL 与中文混合 | 4 | 前后中文、全角逗号、多 URL+标点 |
+| Skip Zone | 7 | `<a>`, `<code>`, `<pre>`, `<textarea>`, `<button>`, `<pre><code>`, `<input>` |
+| Shadow DOM | 3 | 单层、嵌套、三层嵌套 |
+| 边界情况 | 5 | 无 URL、email/ftp、javascript:、锚点、端口号 |
+| 动态内容 | 2 | 增量 linkify、characterData 变动 |
+| 内部工具函数 | 4 | pruneRoots 去重/断开/空集/兄弟节点 |
+
 ## 变更记录
 
 见 [CHANGELOG.md](./CHANGELOG.md)。

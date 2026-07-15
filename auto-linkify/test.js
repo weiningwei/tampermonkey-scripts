@@ -161,6 +161,12 @@ function linkify(root) {
   for (const node of nodes) linkifyTextNode(node, true);
 }
 
+// 去重：过滤已断开节点，去除被其他节点包含的子树
+const pruneRoots = (roots) => {
+  const arr = [...roots].filter((n) => n.isConnected);
+  return arr.filter((n) => !arr.some((other) => other !== n && other.contains(n)));
+};
+
 // ─── 测试框架 ─────────────────────────────────────────────────────────────
 
 const EXIT_CODE = Object.freeze({ SUCCESS: 0, FAILURES: 1, RUNTIME_ERROR: 2 });
@@ -340,6 +346,12 @@ function runTests() {
     assertEqual(countLinksIn(dom.window.document.body), 0);
   });
 
+  test('3.7 <input> — URL 不被转换', () => {
+    const dom = createDOM('<form><input type="text" value="https://should.not.link/"></form>');
+    linkify(dom.window.document.body);
+    assertEqual(countLinksIn(dom.window.document.body), 0);
+  });
+
   // ══════════════════════════════════════════════════════════════════════
   console.log(`\n${colors.cyan}4. Shadow DOM${colors.reset}`);
 
@@ -431,6 +443,55 @@ function runTests() {
     container.appendChild(span);
     linkify(container);
     assertEqual(countLinksIn(container), 1);
+  });
+
+  test('6.2 characterData 变动 — 新文本节点触发处理', () => {
+    const dom = createDOM('<p id="target">普通文本</p>');
+    linkify(dom.window.document.body);
+    // 模拟 characterData 的实际行为：旧文本节点被替换为新节点
+    const target = dom.window.document.getElementById('target');
+    const newText = dom.window.document.createTextNode('请访问 https://changed.test.com/page');
+    target.replaceChild(newText, target.firstChild);
+    linkifyTextNode(newText);
+    assertEqual(countLinksIn(target), 1, '新文本中的链接应被处理');
+    assertEqual(
+      target.querySelector('a').href,
+      'https://changed.test.com/page'
+    );
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  console.log(`\n${colors.cyan}7. 内部工具函数${colors.reset}`);
+
+  test('7.1 pruneRoots — 过滤包含关系', () => {
+    const dom = createDOM('<div id="parent"><div id="child">text</div></div>');
+    const parent = dom.window.document.getElementById('parent');
+    const child = dom.window.document.getElementById('child');
+    const pruned = pruneRoots(new Set([parent, child]));
+    assertEqual(pruned.length, 1, '应只保留 1 个节点');
+    assert(pruned[0] === parent, '应保留最外层节点');
+  });
+
+  test('7.2 pruneRoots — 过滤已断开节点', () => {
+    const dom = createDOM('<div id="keep">text</div>');
+    const keep = dom.window.document.getElementById('keep');
+    const detached = dom.window.document.createElement('span');
+    const pruned = pruneRoots(new Set([keep, detached]));
+    assertEqual(pruned.length, 1, '应只保留 1 个节点');
+    assert(pruned[0] === keep, '应保留已连接节点');
+  });
+
+  test('7.3 pruneRoots — 空集合', () => {
+    const pruned = pruneRoots(new Set());
+    assertEqual(pruned.length, 0);
+  });
+
+  test('7.4 pruneRoots — 平级兄弟节点都保留', () => {
+    const dom = createDOM('<div id="a">A</div><div id="b">B</div>');
+    const a = dom.window.document.getElementById('a');
+    const b = dom.window.document.getElementById('b');
+    const pruned = pruneRoots(new Set([a, b]));
+    assertEqual(pruned.length, 2, '兄弟节点应全部保留');
   });
 
   // ══════════════════════════════════════════════════════════════════════
