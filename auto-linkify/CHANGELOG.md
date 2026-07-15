@@ -2,10 +2,15 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.4.1] - 2026-07-15
+
+### Changed
+- 菜单命令改为只注册一次（标题固定为 `查看转换统计`），点击时实时读取 `STATS` 弹出统计。避免之前每次更新都 unregister/register 同一菜单项导致菜单出现多条重复项的问题。
+
 ## [1.4.0] - 2026-07-15
 
 ### Added
-- 扩展菜单新增统计命令，显示已转换链接数量和累计转换耗时。使用 `GM_registerMenuCommand` 实现，无需注入页面元素。
+- 扩展菜单新增 `查看转换统计` 命令，弹出当前已转换链接数量和累计转换耗时。使用 `GM_registerMenuCommand` 注册一次，统计结果在点击时实时读取，避免反复 unregister/register 导致菜单项累积。
 
 ## [1.3.0] - 2026-07-15
 

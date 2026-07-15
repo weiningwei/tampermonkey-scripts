@@ -1,13 +1,12 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.4.0
+// @version      1.4.1
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at      document-idle
 // @grant        GM_registerMenuCommand
-// @grant        GM_unregisterMenuCommand
 // @license     MIT
 // ==/UserScript==
 
@@ -191,7 +190,6 @@
     collectTextNodes(root, nodes);
     for (const node of nodes) linkifyTextNode(node, true);
     STATS.totalMs += performance.now() - t0;
-    updateMenu();
   }
 
   /* --------------------------- 动态内容处理 --------------------------- */
@@ -242,13 +240,10 @@
         else linkify(root);
       }
       STATS.totalMs += performance.now() - t0;
-      updateMenu();
     }, CONFIG.DEBOUNCE_MS);
   });
 
   /* ----------------------------- 菜单栏统计 -------------------------- */
-  let menuId = null;
-
   function formatMs(ms) {
     if (ms < 1) return '<1ms';
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -259,17 +254,16 @@
     return `${m}m${s}s`;
   }
 
-  function updateMenu() {
-    if (menuId !== null) GM_unregisterMenuCommand(menuId);
-    const label = `${STATS.count} 个链接 · ${formatMs(STATS.totalMs)}`;
-    menuId = GM_registerMenuCommand(label, () => {
+  // 只注册一次菜单项；点击时读取当前统计，避免 unregister/register 累积成多条
+  function registerMenu() {
+    GM_registerMenuCommand('查看转换统计', () => {
       alert(`已转换 ${STATS.count} 个链接，累计耗时 ${formatMs(STATS.totalMs)}。`);
     });
   }
 
   /* ------------------------------- 启动 ------------------------------- */
   function init() {
-    updateMenu();
+    registerMenu();
     linkify(document.body);
     observeShadowsOf(document.body);
     observer.observe(document.body, {
