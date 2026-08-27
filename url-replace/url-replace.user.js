@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.6.0
+// @version      0.7.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -20,6 +20,7 @@
     // 默认替换规则：仅首次运行时作为初始值写入存储，之后以页面内增删为准。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
+      { from: 'github', to: 'github1s' },
     ],
     // 按钮文案模板：{from} 与 {to} 会被替换为当前切换方向的原串/目标串
     BUTTON_TEXT: '{from} → {to}',
@@ -53,18 +54,26 @@
   let rules = loadRules();
 
   // 判断切换方向：返回 { from, to, url }，无匹配返回 null
+  // 当 from 与 to 同时命中（一方是另一方子串，如 github 与 github1s）时，取较长者作为当前串。
   function detectSwitch() {
     const href = location.href;
     for (const rule of rules) {
       if (!isValidRule(rule)) continue;
-      // 正向：网址包含 from
-      if (href.includes(rule.from)) {
-        return { from: rule.from, to: rule.to, url: href.replaceAll(rule.from, rule.to) };
+      const { from, to } = rule;
+      const hasFrom = href.includes(from);
+      const hasTo = href.includes(to);
+      if (!hasFrom && !hasTo) continue;
+      let cur, target;
+      if (hasFrom && hasTo) {
+        // 同时命中：取较长者（更具体）作为当前串；长度相等时按 from → to
+        if (from.length >= to.length) { cur = from; target = to; }
+        else { cur = to; target = from; }
+      } else if (hasFrom) {
+        cur = from; target = to;
+      } else {
+        cur = to; target = from;
       }
-      // 反向：网址包含 to
-      if (href.includes(rule.to)) {
-        return { from: rule.to, to: rule.from, url: href.replaceAll(rule.to, rule.from) };
-      }
+      return { from: cur, to: target, url: href.replaceAll(cur, target) };
     }
     return null;
   }

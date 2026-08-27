@@ -4,6 +4,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.0] - 2026-08-27
+
+### Added
+
+- 默认规则新增 `github` → `github1s`（双向）。
+
+### Fixed
+
+- 修复子串包含关系的方向误判：`from`/`to` 一方是另一方子串时（如 `github` 与 `github1s`），改取较长者作为当前串判断方向，避免 `github1s.com` 被误替换为 `github1s1s.com`。
+
 ## [0.6.0] - 2026-08-27
 
 ### Fixed

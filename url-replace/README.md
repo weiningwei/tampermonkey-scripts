@@ -30,18 +30,19 @@
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }]` | 初始默认规则；仅在首次运行时写入存储，之后以页面内增删为准 |
+| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }, { from: 'github', to: 'github1s' }]` | 初始默认规则；仅在首次运行时写入存储，之后以页面内增删为准 |
 | `BUTTON_TEXT` | `'{from} → {to}'` | 按钮文案模板；`{from}`、`{to}` 会被替换为当前方向的原串、目标串 |
 | `ALWAYS_SHOW` | `false` | 无匹配时是否仍显示切换按钮 |
 | `OPEN_IN_NEW_TAB` | `true` | 是否在新标签页打开（`false` 则当前页跳转） |
 
 ### 替换规则示例
 
-将 `gitcode` 替换为 `atomgit`（默认规则，双向切换）：
+默认规则（双向切换）：
 
 ```js
 REPLACEMENTS: [
   { from: 'gitcode', to: 'atomgit' },
+  { from: 'github', to: 'github1s' },
 ],
 ```
 
@@ -65,7 +66,7 @@ REPLACEMENTS: [
 ## 注意事项
 
 - 替换为字符串级别的「包含即替换」，`from`/`to` 中出现多次会被全部替换（`String.prototype.replaceAll`）。
-- 双向切换按 `from` 优先判断：若网址同时包含 `from` 与 `to`，按 `from → to` 方向处理。
+- 当 `from` 与 `to` 一方是另一方子串（如 `github` 与 `github1s`）时，取**较长者**作为当前串判断方向；两者长度相等时按 `from → to` 处理。
 - 默认只在网址命中规则时显示按钮，避免无谓的页面元素注入。
 - 若某页网址不含任何规则的 `from` 或 `to` 且 `ALWAYS_SHOW` 为 `false`，则不会注入按钮。
 
