@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.7.0
+// @version      0.8.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -22,8 +22,8 @@
       { from: 'gitcode', to: 'atomgit' },
       { from: 'github', to: 'github1s' },
     ],
-    // 按钮文案模板：{from} 与 {to} 会被替换为当前切换方向的原串/目标串
-    BUTTON_TEXT: '{from} → {to}',
+    // 按钮文案模板：{from}、{to} 为规则原串；{arrow} 为 →（正向）或 ←（反向）
+    BUTTON_TEXT: '{from} {arrow} {to}',
     // 是否在无匹配时也显示切换按钮（false：仅当存在匹配规则时才显示）
     ALWAYS_SHOW: false,
     // 是否在新标签页打开（true）；false 则在当前页跳转
@@ -53,7 +53,8 @@
 
   let rules = loadRules();
 
-  // 判断切换方向：返回 { from, to, url }，无匹配返回 null
+  // 判断切换方向：返回 { from, to, forward, url }，无匹配返回 null
+  // from/to 始终为规则原串；forward=true 表示正向（from→to），false 表示反向（to→from）。
   // 当 from 与 to 同时命中（一方是另一方子串，如 github 与 github1s）时，取较长者作为当前串。
   function detectSwitch() {
     const href = location.href;
@@ -73,14 +74,19 @@
       } else {
         cur = to; target = from;
       }
-      return { from: cur, to: target, url: href.replaceAll(cur, target) };
+      const forward = cur === from;
+      return { from, to, forward, url: href.replaceAll(cur, target) };
     }
     return null;
   }
 
-  // 生成按钮文案：体现 from、to 与切换方向
+  // 生成按钮文案：固定显示规则原串 from、to，箭头体现切换方向
   function formatLabel(sw) {
-    return CONFIG.BUTTON_TEXT.replaceAll('{from}', sw.from).replaceAll('{to}', sw.to);
+    const arrow = sw.forward === false ? '←' : '→';
+    return CONFIG.BUTTON_TEXT
+      .replaceAll('{from}', sw.from)
+      .replaceAll('{to}', sw.to)
+      .replaceAll('{arrow}', arrow);
   }
 
   // 打开切换后的网址（无匹配时提示）

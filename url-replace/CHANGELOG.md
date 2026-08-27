@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.8.0] - 2026-08-27
+
+### Changed
+
+- 按钮文案固定为规则原串 `from`、`to`，用箭头体现方向：正向 `from → to`、反向 `from ← to`；`BUTTON_TEXT` 模板改为 `{from} {arrow} {to}`。
+
 ## [0.7.0] - 2026-08-27
 
 ### Added
