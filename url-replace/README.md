@@ -1,13 +1,14 @@
 # URL Replace（网址替换新标签打开）
 
-当浏览器当前网页的网址中包含指定字符串时，将其替换为另一字符串，并在页面右下角显示一个按钮；点击按钮后，在新标签页打开替换后的网址。
+当浏览器当前网页的网址中包含指定字符串时，可双向切换到另一字符串，并在页面右下角显示一个按钮；点击按钮后，在新标签页打开切换后的网址。
 
 ## 功能特性
 
-- 检测当前网址（`location.href`）是否包含指定字符串 `from`，若包含则替换为 `to`。
+- **双向切换**：网址包含 `from` 时切换到 `to`；网址包含 `to` 时反向切换到 `from`（例如 `gitcode` ⇄ `atomgit`）。
+- 按钮文案体现 `from`、`to` 与切换方向（默认 `{from} → {to}`，如 `gitcode → atomgit`）。
 - 支持多组替换规则，按数组顺序取第一个命中的规则。
 - 仅在存在匹配时显示按钮（可配置为始终显示），按钮悬浮于页面右下角。
-- 鼠标悬停按钮可预览替换后的完整网址。
+- 鼠标悬停按钮可预览切换后的完整网址。
 - 点击按钮在新标签页打开（`window.open`，可配置为当前页跳转）。
 - 同时注册油猴菜单命令（Tampermonkey / Violentmonkey 扩展图标下拉菜单），点击菜单同样打开替换后的网址。
 - 仅依赖 `GM_registerMenuCommand`，兼容 Tampermonkey / Violentmonkey。
@@ -30,14 +31,14 @@
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }]` | 替换规则数组；命中即用 `to` 替换网址中的所有 `from` |
-| `BUTTON_TEXT` | `'打开替换网址'` | 按钮显示文案 |
+| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }]` | 替换规则数组；命中即双向切换（`from` ⇄ `to`） |
+| `BUTTON_TEXT` | `'{from} → {to}'` | 按钮/菜单文案模板；`{from}`、`{to}` 会被替换为当前方向的原串、目标串 |
 | `ALWAYS_SHOW` | `false` | 无匹配时是否仍显示按钮 |
 | `OPEN_IN_NEW_TAB` | `true` | 是否在新标签页打开（`false` 则当前页跳转） |
 
 ### 替换规则示例
 
-将 `gitcode` 替换为 `atomgit`（默认规则）：
+将 `gitcode` 替换为 `atomgit`（默认规则，双向切换）：
 
 ```js
 REPLACEMENTS: [
@@ -56,9 +57,10 @@ REPLACEMENTS: [
 
 ## 注意事项
 
-- 替换为字符串级别的「包含即替换」，`from` 中出现多次会被全部替换（`String.prototype.replaceAll`）。
+- 替换为字符串级别的「包含即替换」，`from`/`to` 中出现多次会被全部替换（`String.prototype.replaceAll`）。
+- 双向切换按 `from` 优先判断：若网址同时包含 `from` 与 `to`，按 `from → to` 方向处理。
 - 默认只在网址命中规则时显示按钮，避免无谓的页面元素注入。
-- 若某页网址不含任何规则的 `from` 且 `ALWAYS_SHOW` 为 `false`，则不会注入按钮。
+- 若某页网址不含任何规则的 `from` 或 `to` 且 `ALWAYS_SHOW` 为 `false`，则不会注入按钮。
 
 ## 变更记录
 

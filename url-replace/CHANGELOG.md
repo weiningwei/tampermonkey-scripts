@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-08-27
+
+### Added
+
+- 支持双向切换：网址包含 `from` 时切到 `to`，包含 `to` 时反向切到 `from`。
+- 按钮/菜单文案支持模板 `{from} → {to}`，自动体现当前切换方向（如 `gitcode → atomgit`）。
+
+### Changed
+
+- `BUTTON_TEXT` 默认值由 `'打开替换网址'` 改为 `'{from} → {to}'`。
+
 ## [0.1.0] - 2026-08-27
 
 ### Added

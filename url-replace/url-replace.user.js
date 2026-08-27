@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.1.0
-// @description  当网址包含指定字符串时，将其替换为另一字符串，并通过按钮在新标签页打开替换后的网址。
+// @version      0.2.0
+// @description  网址包含指定字符串时双向切换，并通过按钮/菜单在新标签页打开切换后的网址。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
@@ -15,14 +15,14 @@
 
   /* ----------------------------- 可配置项 ----------------------------- */
   const CONFIG = {
-    // 替换规则：数组。当前网址只要包含某项的 from，就把其中的 from 全部替换为 to。
-    // 按数组顺序取第一个命中的规则。
+    // 替换规则：数组。按数组顺序取第一个命中的规则。
+    // 当前网址包含 from 时切换为 to；包含 to 时反向切换为 from（双向）。
     REPLACEMENTS: [
-      // 例：https://gitcode.com/xxx → https://atomgit.com/xxx
+      // 例：https://gitcode.com/xxx ⇄ https://atomgit.com/xxx
       { from: 'gitcode', to: 'atomgit' },
     ],
-    // 按钮显示文案
-    BUTTON_TEXT: '打开替换网址',
+    // 按钮文案模板：{from} 与 {to} 会被替换为当前切换方向的原串/目标串
+    BUTTON_TEXT: '{from} → {to}',
     // 是否在无匹配时也显示按钮（false：仅当存在匹配规则时才显示）
     ALWAYS_SHOW: false,
     // 是否在新标签页打开（true）；false 则在当前页跳转
@@ -30,37 +30,48 @@
   };
   /* ------------------------------------------------------------------- */
 
-  // 计算替换后的网址；无匹配返回 null
-  function getReplacedUrl() {
+  // 判断切换方向：返回 { from, to, url }，无匹配返回 null
+  function detectSwitch() {
     const href = location.href;
     for (const rule of CONFIG.REPLACEMENTS) {
-      if (!rule || typeof rule.from !== 'string' || rule.from === '') continue;
+      if (!rule || typeof rule.from !== 'string' || typeof rule.to !== 'string') continue;
+      if (rule.from === '' || rule.to === '') continue;
+      // 正向：网址包含 from
       if (href.includes(rule.from)) {
-        return href.replaceAll(rule.from, rule.to);
+        return { from: rule.from, to: rule.to, url: href.replaceAll(rule.from, rule.to) };
+      }
+      // 反向：网址包含 to
+      if (href.includes(rule.to)) {
+        return { from: rule.to, to: rule.from, url: href.replaceAll(rule.to, rule.from) };
       }
     }
     return null;
   }
 
-  // 打开替换后的网址（无匹配时提示）
+  // 生成按钮/菜单文案：体现 from、to 与切换方向
+  function formatLabel(sw) {
+    return CONFIG.BUTTON_TEXT.replaceAll('{from}', sw.from).replaceAll('{to}', sw.to);
+  }
+
+  // 打开切换后的网址（无匹配时提示）
   function openReplaced() {
-    const url = getReplacedUrl();
-    if (!url) {
+    const sw = detectSwitch();
+    if (!sw) {
       alert('当前网址未命中任何替换规则。');
       return;
     }
     if (CONFIG.OPEN_IN_NEW_TAB) {
-      window.open(url, '_blank');
+      window.open(sw.url, '_blank');
     } else {
-      location.href = url;
+      location.href = sw.url;
     }
   }
 
-  function createButton(url) {
+  function createButton(sw) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = CONFIG.BUTTON_TEXT;
-    btn.title = url;
+    btn.textContent = formatLabel(sw);
+    btn.title = sw.url;
     btn.style.cssText = [
       'position:fixed',
       'right:16px',
@@ -80,16 +91,22 @@
     return btn;
   }
 
-  function registerMenuCommand() {
-    GM_registerMenuCommand(CONFIG.BUTTON_TEXT, openReplaced);
+  function registerMenuCommand(sw) {
+    GM_registerMenuCommand(formatLabel(sw), openReplaced);
   }
 
   function init() {
     if (!document.body) return;
-    registerMenuCommand();
-    const url = getReplacedUrl();
-    if (!url && !CONFIG.ALWAYS_SHOW) return;
-    document.body.appendChild(createButton(url || location.href));
+    const sw = detectSwitch();
+    if (sw) {
+      registerMenuCommand(sw);
+      document.body.appendChild(createButton(sw));
+    } else if (CONFIG.ALWAYS_SHOW) {
+      // 无匹配仍显示：按钮文案退化为占位，点击时提示未命中
+      const fallback = { from: '?', to: '?', url: '' };
+      registerMenuCommand(fallback);
+      document.body.appendChild(createButton(fallback));
+    }
   }
 
   if (document.readyState === 'loading') {
