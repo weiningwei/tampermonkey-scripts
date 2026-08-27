@@ -10,8 +10,7 @@
 - 仅在存在匹配时显示按钮（可配置为始终显示），按钮悬浮于页面右下角。
 - 鼠标悬停按钮可预览切换后的完整网址。
 - 点击按钮在新标签页打开（`window.open`，可配置为当前页跳转）。
-- 同时注册油猴菜单命令（Tampermonkey / Violentmonkey 扩展图标下拉菜单），点击菜单同样打开替换后的网址。
-- 仅依赖 `GM_registerMenuCommand`，兼容 Tampermonkey / Violentmonkey。
+- 无 `GM_*` API 依赖（`@grant none`），兼容 Tampermonkey / Violentmonkey。
 
 ## 安装
 
@@ -32,7 +31,7 @@
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }]` | 替换规则数组；命中即双向切换（`from` ⇄ `to`） |
-| `BUTTON_TEXT` | `'{from} → {to}'` | 按钮/菜单文案模板；`{from}`、`{to}` 会被替换为当前方向的原串、目标串 |
+| `BUTTON_TEXT` | `'{from} → {to}'` | 按钮文案模板；`{from}`、`{to}` 会被替换为当前方向的原串、目标串 |
 | `ALWAYS_SHOW` | `false` | 无匹配时是否仍显示按钮 |
 | `OPEN_IN_NEW_TAB` | `true` | 是否在新标签页打开（`false` 则当前页跳转） |
 

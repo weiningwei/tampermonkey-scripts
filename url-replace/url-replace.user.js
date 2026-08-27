@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.2.0
-// @description  网址包含指定字符串时双向切换，并通过按钮/菜单在新标签页打开切换后的网址。
+// @version      0.3.0
+// @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
-// @grant        GM_registerMenuCommand
+// @grant        none
 // @license      MIT
 // ==/UserScript==
 
@@ -48,7 +48,7 @@
     return null;
   }
 
-  // 生成按钮/菜单文案：体现 from、to 与切换方向
+  // 生成按钮文案：体现 from、to 与切换方向
   function formatLabel(sw) {
     return CONFIG.BUTTON_TEXT.replaceAll('{from}', sw.from).replaceAll('{to}', sw.to);
   }
@@ -91,20 +91,14 @@
     return btn;
   }
 
-  function registerMenuCommand(sw) {
-    GM_registerMenuCommand(formatLabel(sw), openReplaced);
-  }
-
   function init() {
     if (!document.body) return;
     const sw = detectSwitch();
     if (sw) {
-      registerMenuCommand(sw);
       document.body.appendChild(createButton(sw));
     } else if (CONFIG.ALWAYS_SHOW) {
       // 无匹配仍显示：按钮文案退化为占位，点击时提示未命中
       const fallback = { from: '?', to: '?', url: '' };
-      registerMenuCommand(fallback);
       document.body.appendChild(createButton(fallback));
     }
   }

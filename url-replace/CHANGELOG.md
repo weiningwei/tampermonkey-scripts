@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-08-27
+
+### Removed
+
+- 移除油猴菜单命令（`GM_registerMenuCommand`），仅保留页面右下角按钮；`@grant` 改回 `none`。
+
 ## [0.2.0] - 2026-08-27
 
 ### Added
