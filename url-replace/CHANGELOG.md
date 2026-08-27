@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.0] - 2026-08-27
+
+### Changed
+
+- 匹配与替换仅针对域名（hostname），路径 / 查询 / 哈希保持不变。例：`https://github.com/conwnet/github1s` → `https://github1s.com/conwnet/github1s`。
+
 ## [0.8.0] - 2026-08-27
 
 ### Changed

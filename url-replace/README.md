@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- **双向切换**：网址包含 `from` 时切换到 `to`；网址包含 `to` 时反向切换到 `from`（例如 `gitcode` ⇄ `atomgit`）。
+- **双向切换**：网址**域名**包含 `from` 时切换到 `to`；包含 `to` 时反向切换到 `from`（例如 `gitcode` ⇄ `atomgit`）。仅替换域名，路径 / 查询 / 哈希保持不变。
 - 按钮文案固定为规则的 `from`、`to` 原串，箭头体现切换方向：正向 `from → to`，反向 `from ← to`（默认模板 `{from} {arrow} {to}`）。
 - **动态增删规则**：点击齿轮按钮打开管理面板，可新增/删除 `from`、`to` 规则，变更即时生效并全局持久化。
 - 支持多组替换规则，按数组顺序取第一个命中的规则。
@@ -65,7 +65,8 @@ REPLACEMENTS: [
 
 ## 注意事项
 
-- 替换为字符串级别的「包含即替换」，`from`/`to` 中出现多次会被全部替换（`String.prototype.replaceAll`）。
+- 匹配与替换仅针对域名（hostname），路径 / 查询 / 哈希不受影响（例如 `github.com/conwnet/github1s` → `github1s.com/conwnet/github1s`）。
+- 域名中出现多次的 `from`/`to` 会被全部替换（`String.prototype.replaceAll`）。
 - 当 `from` 与 `to` 一方是另一方子串（如 `github` 与 `github1s`）时，取**较长者**作为当前串判断方向；两者长度相等时按 `from → to` 处理。
 - 默认只在网址命中规则时显示按钮，避免无谓的页面元素注入。
 - 若某页网址不含任何规则的 `from` 或 `to` 且 `ALWAYS_SHOW` 为 `false`，则不会注入按钮。

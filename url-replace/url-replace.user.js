@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.8.0
+// @version      0.9.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -54,15 +54,22 @@
   let rules = loadRules();
 
   // 判断切换方向：返回 { from, to, forward, url }，无匹配返回 null
+  // 仅针对域名（hostname）匹配与替换，路径 / 查询 / 哈希保持不变。
   // from/to 始终为规则原串；forward=true 表示正向（from→to），false 表示反向（to→from）。
   // 当 from 与 to 同时命中（一方是另一方子串，如 github 与 github1s）时，取较长者作为当前串。
   function detectSwitch() {
-    const href = location.href;
+    let u;
+    try {
+      u = new URL(location.href);
+    } catch (e) {
+      return null;
+    }
+    const host = u.hostname;
     for (const rule of rules) {
       if (!isValidRule(rule)) continue;
       const { from, to } = rule;
-      const hasFrom = href.includes(from);
-      const hasTo = href.includes(to);
+      const hasFrom = host.includes(from);
+      const hasTo = host.includes(to);
       if (!hasFrom && !hasTo) continue;
       let cur, target;
       if (hasFrom && hasTo) {
@@ -75,7 +82,8 @@
         cur = to; target = from;
       }
       const forward = cur === from;
-      return { from, to, forward, url: href.replaceAll(cur, target) };
+      u.hostname = host.replaceAll(cur, target);
+      return { from, to, forward, url: u.href };
     }
     return null;
   }
