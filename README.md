@@ -6,14 +6,13 @@
 
 | 脚本 | 说明 | 路径 | GreasyFork |
 |------|------|------|-----------|
-| auto-linkify | 自动将网页文本中的 URL 转为可点击链接，支持动态内容 | [`auto-linkify/`](./auto-linkify/) | [一键安装](https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5) |
-| url-replace | 网址包含指定字符串时替换并新标签页打开 | [`url-replace/`](./url-replace/) | [一键安装](https://greasyfork.org/zh-CN/scripts/593213-url-replace-%E7%BD%91%E5%9D%80%E6%9B%BF%E6%8D%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E6%89%93%E5%BC%80) |
+| auto-linkify | 自动将网页文本中的 URL 转为可点击链接，支持动态内容 | [`auto-linkify/`](./auto-linkify/) | [安装](https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5) |
+| url-replace | 网址包含指定字符串时替换并新标签页打开 | [`url-replace/`](./url-replace/) | [安装](https://greasyfork.org/zh-CN/scripts/593213-url-replace-%E7%BD%91%E5%9D%80%E6%9B%BF%E6%8D%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E6%89%93%E5%BC%80) |
 
 ## 安装方式
 
 1. 安装浏览器油猴扩展（[Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)）。
 2. 进入对应脚本文件夹，打开 `*.user.js`，油猴会自动提示安装；或将脚本内容粘贴到「新建脚本」中保存。
-3. 也可从 GreasyFork 一键安装：auto-linkify 的发布页为 <https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5>。
 
 ## License
 
