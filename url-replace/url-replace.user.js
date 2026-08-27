@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.5.0
+// @version      0.6.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
+// @noframes
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @license      MIT
@@ -246,8 +247,23 @@
   bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;';
   bar.append(switchBtn, gearBtn);
 
+  // 监听 SPA 路由变化（popstate / hashchange / pushState / replaceState）
+  function watchUrlChange() {
+    window.addEventListener('popstate', refresh);
+    window.addEventListener('hashchange', refresh);
+    for (const method of ['pushState', 'replaceState']) {
+      const original = history[method];
+      history[method] = function (...args) {
+        const result = original.apply(this, args);
+        refresh();
+        return result;
+      };
+    }
+  }
+
   function init() {
     if (!document.body) return;
+    watchUrlChange();
     document.body.appendChild(bar);
     document.body.appendChild(panel);
     refresh();

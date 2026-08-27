@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.0] - 2026-08-27
+
+### Fixed
+
+- SPA 站内跳转后按钮不更新：监听 `popstate` / `hashchange` / `pushState` / `replaceState`，URL 变化时自动刷新按钮。
+- iframe 重复注入按钮：头部添加 `@noframes`，仅顶层页面运行。
+
 ## [0.5.0] - 2026-08-27
 
 ### Added

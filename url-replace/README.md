@@ -11,6 +11,8 @@
 - 仅在存在匹配时显示按钮（可配置为始终显示），按钮悬浮于页面右下角。
 - 鼠标悬停按钮可预览切换后的完整网址。
 - 点击按钮在新标签页打开（`window.open`，可配置为当前页跳转）。
+- **适配 SPA**：监听 `popstate` / `hashchange` / `pushState` / `replaceState`，站内跳转后按钮自动刷新。
+- 仅顶层页面运行（`@noframes`），避免 iframe 内重复注入按钮。
 - 依赖 `GM_getValue` / `GM_setValue` 实现跨站点持久化，兼容 Tampermonkey / Violentmonkey。
 
 ## 安装
