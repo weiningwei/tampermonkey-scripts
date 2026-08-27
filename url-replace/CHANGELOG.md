@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-08-27
+
+### Added
+
+- 规则管理面板新增「重置为默认」按钮：一键清空所有规则，恢复 `CONFIG.REPLACEMENTS` 默认值。
+
 ## [0.4.0] - 2026-08-27
 
 ### Added

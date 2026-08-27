@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.4.0
+// @version      0.5.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -130,9 +130,17 @@
     'display:none',
   ].join(';');
 
-  const panelTitle = document.createElement('div');
+  const panelHeader = document.createElement('div');
+  panelHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+  const panelTitle = document.createElement('span');
   panelTitle.textContent = '规则管理';
-  panelTitle.style.cssText = 'font-weight:bold;margin-bottom:8px;';
+  panelTitle.style.cssText = 'font-weight:bold;';
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.textContent = '重置为默认';
+  resetBtn.title = '清空所有规则，恢复 CONFIG.REPLACEMENTS 默认值';
+  resetBtn.style.cssText = 'padding:2px 8px;color:#1a73e8;background:none;border:1px solid #1a73e8;border-radius:4px;cursor:pointer;';
+  panelHeader.append(panelTitle, resetBtn);
 
   const listEl = document.createElement('div');
   listEl.style.cssText = 'max-height:200px;overflow-y:auto;margin-bottom:8px;';
@@ -151,7 +159,7 @@
   addBtn.style.cssText = 'padding:6px 12px;color:#fff;background:#1a73e8;border:none;border-radius:4px;cursor:pointer;';
   formRow.append(fromInput, toInput, addBtn);
 
-  panel.append(panelTitle, listEl, formRow);
+  panel.append(panelHeader, listEl, formRow);
 
   gearBtn.addEventListener('click', () => {
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
@@ -206,6 +214,15 @@
       if (e.key === 'Enter') addRule();
     });
   });
+
+  // 重置为默认规则
+  function resetRules() {
+    if (!confirm('确定清空所有规则并恢复默认值吗？')) return;
+    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to }));
+    saveRules();
+    refresh();
+  }
+  resetBtn.addEventListener('click', resetRules);
 
   // 刷新切换按钮与规则列表
   function refresh() {
