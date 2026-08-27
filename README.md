@@ -7,6 +7,7 @@
 | 脚本 | 说明 | 路径 | GreasyFork |
 |------|------|------|-----------|
 | auto-linkify | 自动将网页文本中的 URL 转为可点击链接，支持动态内容 | [`auto-linkify/`](./auto-linkify/) | [一键安装](https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5) |
+| url-replace | 网址包含指定字符串时替换并新标签页打开 | [`url-replace/`](./url-replace/) | 暂无 |
 
 ## 安装方式
 
