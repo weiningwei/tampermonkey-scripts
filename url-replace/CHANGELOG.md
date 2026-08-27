@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-08-27
+
+### Added
+
+- 支持动态增删替换规则：右下角齿轮按钮打开管理面板，可新增/删除 `from`、`to` 规则。
+- 规则通过 `GM_setValue` / `GM_getValue` 全局持久化，跨站点共享；`CONFIG.REPLACEMENTS` 仅作为首次运行的初始值。
+
 ## [0.3.0] - 2026-08-27
 
 ### Removed
