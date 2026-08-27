@@ -13,6 +13,9 @@
 
 1. 安装浏览器油猴扩展（[Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)）。
 2. 进入对应脚本文件夹，打开 `*.user.js`，油猴会自动提示安装；或将脚本内容粘贴到「新建脚本」中保存。
+3. 刷新网页即可生效。
+
+> 各脚本也可从上表「脚本总览」的 GreasyFork 列直接安装。
 
 ## License
 

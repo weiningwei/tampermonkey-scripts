@@ -15,11 +15,8 @@
 
 ## 安装
 
-1. 安装浏览器油猴扩展（[Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)）。
-2. 点击扩展图标 → 「新建脚本」，将本仓库 `url-replace/url-replace.user.js` 的内容粘贴保存；
-   或直接访问该 `.user.js` 文件地址，油猴会自动提示安装。
-3. 也可从 GreasyFork 安装：[URL Replace（网址替换新标签打开）](https://greasyfork.org/zh-CN/scripts/593213-url-replace-%E7%BD%91%E5%9D%80%E6%9B%BF%E6%8D%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E6%89%93%E5%BC%80)。
-4. 刷新网页即可生效。
+- GreasyFork 安装：[URL Replace（网址替换新标签打开）](https://greasyfork.org/zh-CN/scripts/593213-url-replace-%E7%BD%91%E5%9D%80%E6%9B%BF%E6%8D%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E6%89%93%E5%BC%80)。
+- 手动安装：安装本仓库 `url-replace/url-replace.user.js`，通用步骤见[根目录 README](../README.md)。
 
 ## 适用范围
 
