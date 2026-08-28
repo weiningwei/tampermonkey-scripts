@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.9.0
+// @version      0.9.1
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -88,13 +88,27 @@
     return null;
   }
 
-  // 生成按钮文案：固定显示规则原串 from、to，箭头体现切换方向
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  // 生成按钮文案：弱化当前串、强调目标串（目标串即切换后网址命中的字符串），箭头体现切换方向
   function formatLabel(sw) {
     const arrow = sw.forward === false ? '←' : '→';
+    // forward=true 表示 from→to：当前串是 from，目标串是 to；反向则相反
+    const dim = 'color:rgba(255,255,255,.65)';
+    const strong = 'color:#fff;font-weight:bold';
+    const fromStyle = sw.forward ? dim : strong;
+    const toStyle = sw.forward ? strong : dim;
+    const fromHtml = `<span style="${fromStyle}">${escapeHtml(sw.from)}</span>`;
+    const toHtml = `<span style="${toStyle}">${escapeHtml(sw.to)}</span>`;
+    const arrowHtml = `<span style="color:#fff">${arrow}</span>`;
     return CONFIG.BUTTON_TEXT
-      .replaceAll('{from}', sw.from)
-      .replaceAll('{to}', sw.to)
-      .replaceAll('{arrow}', arrow);
+      .replaceAll('{from}', fromHtml)
+      .replaceAll('{to}', toHtml)
+      .replaceAll('{arrow}', arrowHtml);
   }
 
   // 打开切换后的网址（无匹配时提示）
@@ -252,7 +266,7 @@
   function refresh() {
     const sw = detectSwitch();
     if (sw) {
-      switchBtn.textContent = formatLabel(sw);
+      switchBtn.innerHTML = formatLabel(sw);
       switchBtn.title = sw.url;
       switchBtn.style.display = '';
     } else if (CONFIG.ALWAYS_SHOW) {

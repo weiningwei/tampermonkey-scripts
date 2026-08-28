@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.1] - 2026-08-28
+
+### Changed
+
+- 按钮文案弱化当前串、强调目标串：正向 `from → to` 时 `from` 半透明、`to` 加粗高亮；反向 `from ← to` 时反之。箭头保持中性。
+
 ## [0.9.0] - 2026-08-27
 
 ### Changed
