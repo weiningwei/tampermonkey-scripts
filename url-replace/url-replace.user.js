@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.2
+// @version      0.11.3
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -311,12 +311,14 @@
   }
 
   toggleBtn.addEventListener('click', () => {
-    const rightEdge = bar.getBoundingClientRect().right; // 记录把手（最右侧）收起前的位置
+    const t = toggleBtn.getBoundingClientRect();
+    const cx = t.left + t.width / 2; // 记录把手中心，收起/展开后保持不变
+    const cy = t.top + t.height / 2;
     collapsed = !collapsed;
     GM_setValue(COLLAPSED_KEY, collapsed);
     if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
     refresh();
-    keepHandlePosition(rightEdge);
+    keepHandlePosition(cx, cy);
   });
 
   // 将工具栏定位到指定左上角坐标（right/bottom 置为 auto 以让 left/top 生效），并限制在视口内
@@ -338,13 +340,26 @@
     }
   }
 
-  // 收起/展开后保持把手（最右侧按钮）位置不变：仅左锚定（拖动过）时调整 left，并持久化
-  function keepHandlePosition(rightEdge) {
+  // 收起/展开后保持把手（最右侧按钮）中心位置不变：仅左锚定（拖动过）时调整，并持久化。
+  // 关键：按把手中心定位而非工具栏右缘，即使用展开后的工具栏更宽、会超出视口左缘，
+  // 也不做钳制，从而保证收起/展开位置始终一致（修复旧实现遇左侧边缘时把手发生位移的问题）。
+  function keepHandlePosition(cx, cy) {
     if (!bar.style.left || bar.style.left === 'auto') return;
-    const rect = bar.getBoundingClientRect();
-    setBarPos(rightEdge - rect.width, rect.top);
     const r = bar.getBoundingClientRect();
-    GM_setValue(POS_KEY, { left: r.left, top: r.top });
+    const t = toggleBtn.getBoundingClientRect();
+    // 把手中心相对工具栏左上的偏移（收起/展开后布局已就绪）
+    const offX = (t.left + t.width / 2) - r.left;
+    const offY = (t.top + t.height / 2) - r.top;
+    // 仅约束把手中心不超出视口（区别于拖动时对整栏的钳制），避免右侧展开时被钳到 0 而位移
+    const halfW = t.width / 2;
+    const halfH = t.height / 2;
+    const x = Math.min(Math.max(cx, halfW), window.innerWidth - halfW);
+    const y = Math.min(Math.max(cy, halfH), window.innerHeight - halfH);
+    bar.style.left = (x - offX) + 'px';
+    bar.style.top = (y - offY) + 'px';
+    bar.style.right = 'auto';
+    bar.style.bottom = 'auto';
+    GM_setValue(POS_KEY, { left: bar.offsetLeft, top: bar.offsetTop });
   }
 
   // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
