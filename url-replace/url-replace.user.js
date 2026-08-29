@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.1
+// @version      0.11.2
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -311,11 +311,12 @@
   }
 
   toggleBtn.addEventListener('click', () => {
+    const rightEdge = bar.getBoundingClientRect().right; // 记录把手（最右侧）收起前的位置
     collapsed = !collapsed;
     GM_setValue(COLLAPSED_KEY, collapsed);
     if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
     refresh();
-    reclamp();
+    keepHandlePosition(rightEdge);
   });
 
   // 将工具栏定位到指定左上角坐标（right/bottom 置为 auto 以让 left/top 生效），并限制在视口内
@@ -337,12 +338,13 @@
     }
   }
 
-  // 尺寸变化（如展开/收起）后重新夹紧到视口内，避免左锚定模式下溢出右侧
-  function reclamp() {
-    if (bar.style.left && bar.style.left !== 'auto') {
-      const rect = bar.getBoundingClientRect();
-      setBarPos(rect.left, rect.top);
-    }
+  // 收起/展开后保持把手（最右侧按钮）位置不变：仅左锚定（拖动过）时调整 left，并持久化
+  function keepHandlePosition(rightEdge) {
+    if (!bar.style.left || bar.style.left === 'auto') return;
+    const rect = bar.getBoundingClientRect();
+    setBarPos(rightEdge - rect.width, rect.top);
+    const r = bar.getBoundingClientRect();
+    GM_setValue(POS_KEY, { left: r.left, top: r.top });
   }
 
   // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
