@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.9.1
+// @version      0.10.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -32,6 +32,7 @@
   /* ------------------------------------------------------------------- */
 
   const STORAGE_KEY = 'url-replace.rules';
+  const POS_KEY = 'url-replace.buttonPos';
 
   function isValidRule(r) {
     return r && typeof r.from === 'string' && typeof r.to === 'string'
@@ -154,8 +155,6 @@
   const panel = document.createElement('div');
   panel.style.cssText = [
     'position:fixed',
-    'right:16px',
-    'bottom:64px',
     'z-index:2147483647',
     'width:280px',
     'padding:12px',
@@ -200,8 +199,12 @@
   panel.append(panelHeader, listEl, formRow);
 
   gearBtn.addEventListener('click', () => {
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    if (panel.style.display === 'block') renderList();
+    const show = panel.style.display === 'none';
+    panel.style.display = show ? 'block' : 'none';
+    if (show) {
+      renderList();
+      positionPanel();
+    }
   });
 
   // 渲染规则列表
@@ -279,10 +282,94 @@
     if (panel.style.display === 'block') renderList();
   }
 
-  // 底部工具栏：切换按钮 + 齿轮按钮
+  // 底部工具栏：切换按钮 + 齿轮按钮（可拖动，位置持久化）
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;';
+  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
   bar.append(switchBtn, gearBtn);
+
+  // 将工具栏定位到指定左上角坐标（right/bottom 置为 auto 以让 left/top 生效），并限制在视口内
+  function setBarPos(x, y) {
+    const rect = bar.getBoundingClientRect();
+    const maxX = Math.max(0, window.innerWidth - rect.width);
+    const maxY = Math.max(0, window.innerHeight - rect.height);
+    bar.style.left = Math.min(Math.max(0, x), maxX) + 'px';
+    bar.style.top = Math.min(Math.max(0, y), maxY) + 'px';
+    bar.style.right = 'auto';
+    bar.style.bottom = 'auto';
+  }
+
+  // 恢复上次拖动保存的位置
+  function applySavedPos() {
+    const saved = GM_getValue(POS_KEY, null);
+    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
+      setBarPos(saved.left, saved.top);
+    }
+  }
+
+  // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
+  function positionPanel() {
+    const gap = 8;
+    const rect = bar.getBoundingClientRect();
+    const pw = panel.offsetWidth || 280;
+    const ph = panel.offsetHeight || 0;
+    let left = rect.right - pw; // 默认右缘与工具栏右缘对齐
+    if (left < gap) left = gap;
+    if (left + pw > window.innerWidth - gap) left = window.innerWidth - pw - gap;
+    let top = rect.top - gap - ph; // 默认在工具栏上方
+    if (top < gap) top = rect.bottom + gap; // 上方空间不足则放到下方
+    if (top + ph > window.innerHeight - gap) top = window.innerHeight - ph - gap;
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+  }
+
+  // 拖动逻辑：按下后超过阈值即视为拖动（区别于点击），松开时保存位置
+  const DRAG_THRESHOLD = 4;
+  let dragState = null;
+  let didDrag = false;
+
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const rect = bar.getBoundingClientRect();
+    dragState = {
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    };
+    didDrag = false;
+    bar.setPointerCapture(e.pointerId);
+  });
+
+  bar.addEventListener('pointermove', (e) => {
+    if (!dragState) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (!didDrag && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    didDrag = true;
+    setBarPos(e.clientX - dragState.offsetX, e.clientY - dragState.offsetY);
+  });
+
+  function endDrag() {
+    dragState = null;
+    if (didDrag) {
+      const rect = bar.getBoundingClientRect();
+      GM_setValue(POS_KEY, { left: rect.left, top: rect.top });
+      didDrag = false;
+    }
+  }
+  bar.addEventListener('pointerup', endDrag);
+  bar.addEventListener('pointercancel', endDrag);
+
+  // 拖动后抑制子按钮的 click（捕获阶段，先于按钮自身的 click 处理器执行）
+  bar.addEventListener('click', (e) => {
+    if (didDrag) {
+      e.stopPropagation();
+      e.preventDefault();
+      didDrag = false;
+    }
+  }, true);
 
   // 监听 SPA 路由变化（popstate / hashchange / pushState / replaceState）
   function watchUrlChange() {
@@ -303,6 +390,7 @@
     watchUrlChange();
     document.body.appendChild(bar);
     document.body.appendChild(panel);
+    applySavedPos();
     refresh();
   }
 

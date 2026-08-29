@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.10.0] - 2026-08-29
+
+### Added
+
+- 工具栏（切换按钮 + 齿轮按钮）支持拖动：按住拖动可调整位置，位置通过 `GM_setValue` 持久化，刷新页面后保留；规则管理面板自动跟随工具栏显示在其上方（空间不足时改到下方）。
+
 ## [0.9.1] - 2026-08-28
 
 ### Changed
