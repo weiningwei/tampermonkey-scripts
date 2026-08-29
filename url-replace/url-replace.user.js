@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.10.0
+// @version      0.11.0
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -33,6 +33,7 @@
 
   const STORAGE_KEY = 'url-replace.rules';
   const POS_KEY = 'url-replace.buttonPos';
+  const COLLAPSED_KEY = 'url-replace.collapsed';
 
   function isValidRule(r) {
     return r && typeof r.from === 'string' && typeof r.to === 'string'
@@ -53,6 +54,7 @@
   }
 
   let rules = loadRules();
+  let collapsed = GM_getValue(COLLAPSED_KEY, false) === true;
 
   // 判断切换方向：返回 { from, to, forward, url }，无匹配返回 null
   // 仅针对域名（hostname）匹配与替换，路径 / 查询 / 哈希保持不变。
@@ -150,6 +152,12 @@
   gearBtn.textContent = '⚙';
   gearBtn.title = '管理规则';
   gearBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#5f6368;padding:10px 12px;';
+
+  // 收起/展开切换按钮：收起后仅保留此小把手，避免遮挡页面
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.title = '收起';
+  toggleBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#3c4043;padding:10px 10px;';
 
   // 规则管理面板
   const panel = document.createElement('div');
@@ -279,13 +287,36 @@
     } else {
       switchBtn.style.display = 'none';
     }
+    applyCollapsed();
     if (panel.style.display === 'block') renderList();
   }
 
   // 底部工具栏：切换按钮 + 齿轮按钮（可拖动，位置持久化）
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
-  bar.append(switchBtn, gearBtn);
+  bar.append(switchBtn, gearBtn, toggleBtn);
+
+  // 根据收起状态切换按钮显示：收起时仅保留把手，展开时恢复
+  function applyCollapsed() {
+    if (collapsed) {
+      switchBtn.style.display = 'none';
+      gearBtn.style.display = 'none';
+      toggleBtn.textContent = '«';
+      toggleBtn.title = '展开';
+    } else {
+      gearBtn.style.display = '';
+      toggleBtn.textContent = '»';
+      toggleBtn.title = '收起';
+    }
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    GM_setValue(COLLAPSED_KEY, collapsed);
+    if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
+    refresh();
+    reclamp();
+  });
 
   // 将工具栏定位到指定左上角坐标（right/bottom 置为 auto 以让 left/top 生效），并限制在视口内
   function setBarPos(x, y) {
@@ -303,6 +334,14 @@
     const saved = GM_getValue(POS_KEY, null);
     if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
       setBarPos(saved.left, saved.top);
+    }
+  }
+
+  // 尺寸变化（如展开/收起）后重新夹紧到视口内，避免左锚定模式下溢出右侧
+  function reclamp() {
+    if (bar.style.left && bar.style.left !== 'auto') {
+      const rect = bar.getBoundingClientRect();
+      setBarPos(rect.left, rect.top);
     }
   }
 
