@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.0
+// @version      0.11.1
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -378,7 +378,7 @@
       offsetY: e.clientY - rect.top,
     };
     didDrag = false;
-    bar.setPointerCapture(e.pointerId);
+    // 不在此处 setPointerCapture：否则 pointerup/click 会被重定向到 bar，导致子按钮点击失效
   });
 
   bar.addEventListener('pointermove', (e) => {
@@ -386,7 +386,11 @@
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
     if (!didDrag && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-    didDrag = true;
+    if (!didDrag) {
+      didDrag = true;
+      // 确认是拖动后再捕获指针：既保证拖出元素/iframe 时不丢事件，又不影响普通点击
+      try { bar.setPointerCapture(e.pointerId); } catch (_) { /* 指针可能已释放，忽略 */ }
+    }
     setBarPos(e.clientX - dragState.offsetX, e.clientY - dragState.offsetY);
   });
 
@@ -395,7 +399,7 @@
     if (didDrag) {
       const rect = bar.getBoundingClientRect();
       GM_setValue(POS_KEY, { left: rect.left, top: rect.top });
-      didDrag = false;
+      // didDrag 保留到下方 click 抑制器复位，避免拖动后误触发子按钮
     }
   }
   bar.addEventListener('pointerup', endDrag);

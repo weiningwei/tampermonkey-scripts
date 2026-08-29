@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.11.1] - 2026-08-30
+
+### Fixed
+
+- 修复拖动逻辑导致按钮点击失效：`setPointerCapture` 原在 `pointerdown` 时调用，会把 `pointerup`/`click` 重定向到工具栏容器，使子按钮（切换 / 齿轮 / 收起）点击无效。改为仅在确认拖动（移动超过阈值）后再捕获指针。
+
 ## [0.11.0] - 2026-08-29
 
 ### Added
