@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.3
+// @version      0.11.4
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -157,7 +157,7 @@
   const toggleBtn = document.createElement('button');
   toggleBtn.type = 'button';
   toggleBtn.title = '收起';
-  toggleBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#3c4043;padding:10px 10px;';
+  toggleBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#3c4043;padding:10px 0;width:40px;text-align:center;box-sizing:border-box;';
 
   // 规则管理面板
   const panel = document.createElement('div');
