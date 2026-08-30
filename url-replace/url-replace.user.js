@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.5
+// @version      0.11.6
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -311,57 +311,34 @@
   }
 
   toggleBtn.addEventListener('click', () => {
-    const t = toggleBtn.getBoundingClientRect();
-    const cx = t.left + t.width / 2; // 记录把手中心，收起/展开后保持不变
-    const cy = t.top + t.height / 2;
     collapsed = !collapsed;
     GM_setValue(COLLAPSED_KEY, collapsed);
     if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
     refresh();
-    keepHandlePosition(cx, cy);
   });
 
-  // 将工具栏定位到指定左上角坐标（right/bottom 置为 auto 以让 left/top 生效），并限制在视口内
-  function setBarPos(x, y) {
+  // 将工具栏定位到距视口右下角 (right, bottom) 的位置（left/top 置为 auto 以让 right/bottom 生效），并限制在视口内
+  function setBarPos(right, bottom) {
     const rect = bar.getBoundingClientRect();
-    const maxX = Math.max(0, window.innerWidth - rect.width);
-    const maxY = Math.max(0, window.innerHeight - rect.height);
-    bar.style.left = Math.min(Math.max(0, x), maxX) + 'px';
-    bar.style.top = Math.min(Math.max(0, y), maxY) + 'px';
-    bar.style.right = 'auto';
-    bar.style.bottom = 'auto';
+    const maxRight = Math.max(0, window.innerWidth - rect.width);
+    const maxBottom = Math.max(0, window.innerHeight - rect.height);
+    bar.style.right = Math.min(Math.max(0, right), maxRight) + 'px';
+    bar.style.bottom = Math.min(Math.max(0, bottom), maxBottom) + 'px';
+    bar.style.left = 'auto';
+    bar.style.top = 'auto';
   }
 
   // 恢复上次拖动保存的位置
   function applySavedPos() {
     const saved = GM_getValue(POS_KEY, null);
-    if (saved && typeof saved.left === 'number' && typeof saved.top === 'number') {
-      setBarPos(saved.left, saved.top);
+    if (!saved) return;
+    if (typeof saved.right === 'number' && typeof saved.bottom === 'number') {
+      setBarPos(saved.right, saved.bottom);
+    } else if (typeof saved.left === 'number' && typeof saved.top === 'number') {
+      // 兼容旧版 {left, top} 左上锚定格式：换算为右下锚定
+      const rect = bar.getBoundingClientRect();
+      setBarPos(window.innerWidth - saved.left - rect.width, window.innerHeight - saved.top - rect.height);
     }
-  }
-
-  // 收起/展开后保持把手（最右侧按钮）中心位置不变：仅左锚定（拖动过）时调整，并持久化。
-  // 关键：按把手中心定位而非工具栏右缘，即使用展开后的工具栏更宽、会超出视口左缘，
-  // 也不做钳制，从而保证收起/展开位置始终一致（修复旧实现遇左侧边缘时把手发生位移的问题）。
-  function keepHandlePosition(cx, cy) {
-    if (!bar.style.left || bar.style.left === 'auto') return;
-    const r = bar.getBoundingClientRect();
-    const t = toggleBtn.getBoundingClientRect();
-    // 把手中心相对工具栏左上的偏移（收起/展开后布局已就绪）
-    const offX = (t.left + t.width / 2) - r.left;
-    const offY = (t.top + t.height / 2) - r.top;
-    // 仅约束把手中心不超出视口（区别于拖动时对整栏的钳制），避免右侧展开时被钳到 0 而位移
-    const halfW = t.width / 2;
-    const halfH = t.height / 2;
-    const x = Math.min(Math.max(cx, halfW), window.innerWidth - halfW);
-    const y = Math.min(Math.max(cy, halfH), window.innerHeight - halfH);
-    bar.style.left = (x - offX) + 'px';
-    bar.style.top = (y - offY) + 'px';
-    bar.style.right = 'auto';
-    bar.style.bottom = 'auto';
-    // 持久化时必须保存精确的浮点坐标（x - offX / y - offY），
-    // 不能使用 bar.offsetLeft/offsetTop（会取整），否则每次收起/展开累加约 1px 的取整误差，导致把手在任意位置连续操作几次后漂移。
-    GM_setValue(POS_KEY, { left: x - offX, top: y - offY });
   }
 
   // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
@@ -393,8 +370,8 @@
     dragState = {
       startX: e.clientX,
       startY: e.clientY,
-      offsetX: e.clientX - rect.left,
-      offsetY: e.clientY - rect.top,
+      offsetRight: rect.right - e.clientX,
+      offsetBottom: rect.bottom - e.clientY,
     };
     didDrag = false;
     // 不在此处 setPointerCapture：否则 pointerup/click 会被重定向到 bar，导致子按钮点击失效
@@ -410,14 +387,14 @@
       // 确认是拖动后再捕获指针：既保证拖出元素/iframe 时不丢事件，又不影响普通点击
       try { bar.setPointerCapture(e.pointerId); } catch (_) { /* 指针可能已释放，忽略 */ }
     }
-    setBarPos(e.clientX - dragState.offsetX, e.clientY - dragState.offsetY);
+    setBarPos(window.innerWidth - e.clientX - dragState.offsetRight, window.innerHeight - e.clientY - dragState.offsetBottom);
   });
 
   function endDrag() {
     dragState = null;
     if (didDrag) {
       const rect = bar.getBoundingClientRect();
-      GM_setValue(POS_KEY, { left: rect.left, top: rect.top });
+      GM_setValue(POS_KEY, { right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.bottom });
       // didDrag 保留到下方 click 抑制器复位，避免拖动后误触发子按钮
     }
   }
