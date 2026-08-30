@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.11.5] - 2026-08-30
+
+### Fixed
+
+- 修复收起/展开后把手在任意位置（不只左下角）连续操作几次仍会漂移：`keepHandlePosition` 持久化位置时误用 `bar.offsetLeft/offsetTop`（整数，会取整），导致每次收起/展开累加约 1px 取整误差。现改为保存精确的浮点坐标 `x - offX` / `y - offY`，把手中心在反复收起/展开时保持不变。
+
 ## [0.11.4] - 2026-08-30
 
 ### Fixed

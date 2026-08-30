@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.11.4
+// @version      0.11.5
 // @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -359,7 +359,9 @@
     bar.style.top = (y - offY) + 'px';
     bar.style.right = 'auto';
     bar.style.bottom = 'auto';
-    GM_setValue(POS_KEY, { left: bar.offsetLeft, top: bar.offsetTop });
+    // 持久化时必须保存精确的浮点坐标（x - offX / y - offY），
+    // 不能使用 bar.offsetLeft/offsetTop（会取整），否则每次收起/展开累加约 1px 的取整误差，导致把手在任意位置连续操作几次后漂移。
+    GM_setValue(POS_KEY, { left: x - offX, top: y - offY });
   }
 
   // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
