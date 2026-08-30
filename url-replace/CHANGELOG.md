@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.12.1] - 2026-08-30
+
+### Changed
+
+- 新增脚本图标 `@icon`（循环箭头 🔁，体现双向切换），在 Tampermonkey / Violentmonkey 管理页面显示。
+
 ## [0.12.0] - 2026-08-30
 
 ### Changed

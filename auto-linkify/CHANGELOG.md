@@ -2,6 +2,11 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.4.3] - 2026-08-30
+
+### Changed
+- 新增脚本图标 `@icon`（链接 🔗），在 Tampermonkey / Violentmonkey 管理页面显示。
+
 ## [1.4.2] - 2026-07-15
 
 ### Changed
