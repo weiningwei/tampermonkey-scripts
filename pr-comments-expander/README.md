@@ -15,6 +15,7 @@
 
 ## 安装
 
+- GreasyFork 安装：[PR Comments Expander（PR 评论全部展开）](https://greasyfork.org/zh-CN/scripts/593763-pr-comments-expander-pr-%E8%AF%84%E8%AE%BA%E5%85%A8%E9%83%A8%E5%B1%95%E5%BC%80)。
 - 手动安装：打开本目录的 `pr-comments-expander.user.js`，油猴会自动提示安装；通用步骤见[根目录 README](../README.md)。
 
 ## 适用范围
