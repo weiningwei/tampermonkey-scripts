@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -114,12 +114,49 @@
     return findByText();
   }
 
+  /* --------------------------- 滚动位置保护 --------------------------- */
+
+  // 页面自身在展开后常把视口滚到刚展开的讨论处（scrollIntoView / scrollTo）。
+  // 脚本代点的折叠块往往不在用户当前阅读位置，视口被带跑很打断阅读。
+  // 在代点期间把这些编程式滚动 API 临时置为空操作，任务结束恢复原样。
+  // 用户自己的滚轮 / 触摸 / 键盘滚动不走这些 API，不受影响。
+  let scrollSuppressed = 0;
+  let savedScrollApis = null;
+
+  function suppressScroll() {
+    if (scrollSuppressed++) return;
+    const pairs = [];
+    const mute = (obj, name) => {
+      if (typeof obj[name] !== 'function') return;
+      pairs.push([obj, name, obj[name]]);
+      obj[name] = function () {};
+    };
+    mute(window, 'scrollTo');
+    mute(window, 'scrollBy');
+    mute(window, 'scroll');
+    if (window.Element) {
+      mute(window.Element.prototype, 'scrollIntoView');
+      mute(window.Element.prototype, 'scrollTo');
+      mute(window.Element.prototype, 'scrollBy');
+      mute(window.Element.prototype, 'scroll');
+    }
+    savedScrollApis = pairs;
+  }
+
+  function restoreScrollApis() {
+    if (scrollSuppressed > 0) scrollSuppressed--;
+    if (scrollSuppressed > 0 || !savedScrollApis) return;
+    for (const pair of savedScrollApis) pair[0][pair[1]] = pair[2];
+    savedScrollApis = null;
+  }
+
   /* ------------------------------ 展开流程 ------------------------------ */
 
   async function run() {
     if (running) return;
     running = true;
     setStatus('展开中…', 'busy');
+    suppressScroll();
 
     const startedAt = Date.now();
     let clicks = 0;
@@ -145,6 +182,7 @@
         await sleep(CONFIG.ROUND_INTERVAL_MS);
       }
     } finally {
+      restoreScrollApis();
       running = false;
     }
 
