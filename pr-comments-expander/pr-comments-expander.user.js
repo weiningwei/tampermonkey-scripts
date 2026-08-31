@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.2.1
+// @version      0.2.2
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -57,6 +57,8 @@
 
   let autoExpand = CONFIG.AUTO_EXPAND;
   let running = false;
+  // 当前页面累计已展开的折叠块数（跨多次扫描任务累加，跳转到其他页面时清零）
+  let expandedCount = 0;
   let menuId = null;
   let panel = null;
   let statusEl = null;
@@ -159,7 +161,6 @@
     suppressScroll();
 
     const startedAt = Date.now();
-    let clicks = 0;
 
     try {
       for (let round = 0; round < CONFIG.MAX_ROUNDS; round++) {
@@ -173,8 +174,9 @@
           if (!isVisible(target) || isDone(target)) continue;
           target.setAttribute(DONE_ATTR, '1');
           target.click();
-          clicks++;
+          expandedCount++;
           clickedInRound++;
+          setStatus('展开中… ' + expandedCount, 'busy');
           await sleep(CONFIG.CLICK_INTERVAL_MS);
         }
 
@@ -186,7 +188,7 @@
       running = false;
     }
 
-    setStatus(clicks ? '已展开 ' + clicks + ' 处' : '暂无折叠内容', clicks ? 'ok' : 'idle');
+    setStatus(expandedCount ? '已展开 ' + expandedCount + ' 处' : '暂无折叠内容', expandedCount ? 'ok' : 'idle');
   }
 
   function schedule() {
@@ -285,14 +287,20 @@
     schedule();
   });
 
-  // 站内跳转后重新扫描（Nuxt SPA 不会触发 load 事件）
+  // 站内跳转后重新扫描（Nuxt SPA 不会触发 load 事件）。
+  // 仅在路径变化时清零计数与标记：查询串 / 锚点变化（如页面记录展开状态）不算换页
   let lastHref = location.href;
+  let lastPath = location.pathname;
   function checkUrlChange() {
     if (location.href === lastHref) return;
     lastHref = location.href;
-    const marked = document.querySelectorAll('[' + DONE_ATTR + ']');
-    for (const el of marked) el.removeAttribute(DONE_ATTR);
-    setStatus('', 'idle');
+    if (location.pathname !== lastPath) {
+      lastPath = location.pathname;
+      expandedCount = 0;
+      const marked = document.querySelectorAll('[' + DONE_ATTR + ']');
+      for (const el of marked) el.removeAttribute(DONE_ATTR);
+      setStatus('', 'idle');
+    }
     syncPanel();
     schedule();
   }
