@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.1.0
+// @version      0.2.0
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
-// @match        *://gitcode.com/*/*/pull/*
-// @match        *://atomgit.com/*/*/pull/*
+// @match        *://gitcode.com/*
+// @match        *://atomgit.com/*
 // @run-at       document-idle
 // @noframes
 // @grant        GM_getValue
@@ -22,6 +22,10 @@
   const CONFIG = {
     // 打开 PR 页面时是否自动展开（可在油猴菜单中切换，状态持久化）
     AUTO_EXPAND: true,
+    // 在哪些路径下工作：PR 详情页。
+    // 注意 @match 是整站（脚本需在跳转「前」的页面就已注入，SPA 站内跳转不会再注入脚本），
+    // 因此是否真正生效由本正则判断。默认覆盖 /<owner>/<repo>/pull/<n> 及其子路径与查询串。
+    PR_PATH: /^\/[^/]+\/[^/]+\/pull\/\d+(?:[/?#].*)?$/,
     // 折叠块容器选择器（GitCode / AtomGit PR 讨论区：此处折叠了 N 条消息 … 查看更多）
     COLLAPSE_SELECTOR: '.collapse-btn',
     // 容器内优先点击的元素（从内到外；点击子元素会冒泡，父级上的事件处理同样触发）
@@ -59,6 +63,11 @@
   let debounceTimer = null;
 
   /* ------------------------------ 目标查找 ------------------------------ */
+
+  // 当前是否处于 PR 详情页
+  function isActive() {
+    return CONFIG.PR_PATH.test(location.pathname);
+  }
 
   function isVisible(el) {
     return !!el && el.isConnected && el.getClientRects().length > 0;
@@ -143,7 +152,7 @@
   }
 
   function schedule() {
-    if (!autoExpand) return;
+    if (!autoExpand || !isActive()) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(run, CONFIG.DEBOUNCE_MS);
   }
@@ -200,6 +209,17 @@
     document.body.appendChild(panel);
   }
 
+  // 面板只在 PR 详情页显示；站内跳转进出 PR 页时随之创建 / 隐藏
+  function syncPanel() {
+    if (!CONFIG.SHOW_PANEL) return;
+    if (isActive()) {
+      if (!panel && document.body) buildPanel();
+      if (panel) panel.style.display = 'flex';
+    } else if (panel) {
+      panel.style.display = 'none';
+    }
+  }
+
   function refreshMenu() {
     if (menuId !== null && typeof GM_unregisterMenuCommand === 'function') {
       GM_unregisterMenuCommand(menuId);
@@ -234,6 +254,8 @@
     lastHref = location.href;
     const marked = document.querySelectorAll('[' + DONE_ATTR + ']');
     for (const el of marked) el.removeAttribute(DONE_ATTR);
+    setStatus('', 'idle');
+    syncPanel();
     schedule();
   }
 
@@ -255,7 +277,7 @@
 
   function init() {
     autoExpand = GM_getValue(AUTO_KEY, CONFIG.AUTO_EXPAND) !== false;
-    if (CONFIG.SHOW_PANEL && document.body) buildPanel();
+    syncPanel();
     refreshMenu();
     hookHistory();
     observer.observe(document.documentElement, { childList: true, subtree: true });

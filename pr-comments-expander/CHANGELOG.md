@@ -4,6 +4,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-08-31
+
+### Fixed
+
+- 修复「从 PR 列表等页面点击进入 PR 详情页时不自动展开，F5 后才生效」：`@match` 由仅 PR 详情页放宽为整站（`*://gitcode.com/*` / `*://atomgit.com/*`）。GitCode / AtomGit 是 Nuxt 单页应用，站内跳转不产生新文档、脚本也不会重新注入，若只匹配 PR 页，脚本在跳转来源页根本没有注入。实际生效范围改由 `CONFIG.PR_PATH`（PR 详情页路径正则）判断。
+
+### Changed
+
+- 右下角「展开全部评论」按钮改为仅在 PR 详情页显示，站内跳转进出 PR 页时自动创建 / 隐藏；跳转后状态提示清空重扫。
+
 ## [0.1.0] - 2026-08-31
 
 ### Added

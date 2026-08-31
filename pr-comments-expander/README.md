@@ -20,20 +20,21 @@
 
 ## 适用范围
 
-默认只匹配 PR 详情页：
+`@match` 匹配 GitCode / AtomGit 整站：
 
 ```
-// @match        *://gitcode.com/*/*/pull/*
-// @match        *://atomgit.com/*/*/pull/*
+// @match        *://gitcode.com/*
+// @match        *://atomgit.com/*
 ```
 
-即形如 `https://gitcode.com/Cangjie/cangjie_test/pull/2091` 的页面。
+是否真正生效由 `CONFIG.PR_PATH`（默认 `/^\/[^/]+\/[^/]+\/pull\/\d+(?:[/?#].*)?$/`）判断，即形如 `https://gitcode.com/Cangjie/cangjie_test/pull/2091` 的 PR 详情页（含其子路径与查询串）。
 
-同一个折叠组件在 Issue 详情页也存在，如需一并生效，在脚本头部追加即可：
+**为什么匹配整站而不是只匹配 PR 页**：GitCode / AtomGit 是 Nuxt 单页应用，从 PR 列表页点击进入 PR 详情页属于站内前端路由跳转，不会产生新文档，油猴脚本也不会重新注入。若只匹配 PR 页，脚本在跳转来源页（列表页、仓库首页等）根本没有注入，跳转后自然不生效，只有 F5 整页刷新才会展开。匹配整站后，脚本在来源页就已注入，跳转进入 PR 页时立即开始工作；右下角按钮也只在 PR 页显示。
 
-```
-// @match        *://gitcode.com/*/*/issues/*
-// @match        *://atomgit.com/*/*/issues/*
+同一个折叠组件在 Issue 详情页也存在，如需一并生效，把 `CONFIG.PR_PATH` 改为：
+
+```js
+PR_PATH: /^\/[^/]+\/[^/]+\/(pull|issues)\/\d+(?:[/?#].*)?$/,
 ```
 
 ## 可配置项
@@ -43,6 +44,7 @@
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `AUTO_EXPAND` | `true` | 打开页面时是否自动展开；油猴菜单可切换，切换结果优先于此默认值 |
+| `PR_PATH` | `/^\/[^/]+\/[^/]+\/pull\/\d+(?:[/?#].*)?$/` | 在哪些路径下工作（PR 详情页）；`@match` 是整站，实际生效范围由此正则判断 |
 | `COLLAPSE_SELECTOR` | `'.collapse-btn'` | 折叠块容器选择器 |
 | `CLICK_SELECTORS` | `['.collapse-btn__more', '.collapse-btn-content']` | 容器内优先点击的元素（从内到外）；点击子元素会冒泡，父级上的事件处理同样能触发 |
 | `FALLBACK_TEXTS` | `/查看更多\|查看全部\|展开全部\|展开更多\|加载更多\|显示更多\|show more\|load more\|expand all/i` | 兜底文案正则；设为 `null` 关闭兜底 |
