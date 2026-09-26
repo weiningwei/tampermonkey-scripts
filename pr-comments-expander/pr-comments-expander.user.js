@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -233,7 +233,7 @@
     btn.type = 'button';
     btn.className = 'pce-drag-exclude';
     btn.textContent = '展开全部评论';
-    btn.title = '展开本页所有被折叠的评论（拖动面板空白处可移动位置）';
+    btn.title = '展开本页所有被折叠的评论（轻点展开；按住拖动可移动面板）';
     btn.style.cssText = [
       'padding:5px 10px',
       'border:0',
@@ -273,10 +273,12 @@
     panel.style.top = clamp(window.innerHeight - rect.height - 16, 4, window.innerHeight - rect.height - 4) + 'px';
   }
 
-  // 让面板可拖动（鼠标 + 触摸），拖动起点在按钮上时不触发（保证按钮点击可用），
-  // 松手后把位置持久化到 GM 存储，下次打开仍在原位；位置会被限制在视口内。
+  // 让面板可拖动（鼠标 + 触摸），面板上任意位置（含按钮）都能作为拖动起点：
+  // 移动超过阈值判定为拖动，松手后吞掉紧随的 click 并把位置持久化到 GM 存储；
+  // 未移动（轻点）则不拦截，按钮点击正常触发「展开全部评论」。位置限制在视口内。
   function makeDraggable(el) {
     let dragging = false;
+    let startedOnButton = false;
     let startX = 0, startY = 0, startLeft = 0, startTop = 0, moved = false;
 
     const pointOf = (e) =>
@@ -284,9 +286,17 @@
         ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
         : { x: e.clientX, y: e.clientY };
 
+    // 拖动后吞掉同一次操作紧跟的 click（click 在 mouseup/touchend 后同步派发，
+    // 先于 setTimeout 回调），防止拖动被误判成按钮点击；无 click 时立即自行移除
+    function killNextClick() {
+      const kill = (e) => { e.stopPropagation(); e.preventDefault(); };
+      document.addEventListener('click', kill, { capture: true });
+      setTimeout(() => document.removeEventListener('click', kill, { capture: true }), 0);
+    }
+
     function onDown(e) {
-      if (e.target.closest('.pce-drag-exclude')) return; // 按钮区不拖动
       if (e.button !== undefined && e.button !== 0) return; // 仅左键
+      startedOnButton = !!e.target.closest('.pce-drag-exclude');
       dragging = true;
       moved = false;
       const p = pointOf(e);
@@ -303,7 +313,8 @@
       document.addEventListener('mouseup', onUp);
       document.addEventListener('touchmove', onMove, { passive: false });
       document.addEventListener('touchend', onUp);
-      if (e.cancelable) e.preventDefault();
+      // 触摸起点在按钮上时不能 preventDefault，否则浏览器不再合成 click，轻点会失效
+      if (!startedOnButton && e.cancelable) e.preventDefault();
     }
 
     function onMove(e) {
@@ -326,7 +337,10 @@
       document.removeEventListener('mouseup', onUp);
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onUp);
-      if (moved) GM_setValue(PANEL_POS_KEY, { left: el.style.left, top: el.style.top });
+      if (moved) {
+        GM_setValue(PANEL_POS_KEY, { left: el.style.left, top: el.style.top });
+        killNextClick();
+      }
     }
 
     el.addEventListener('mousedown', onDown);
