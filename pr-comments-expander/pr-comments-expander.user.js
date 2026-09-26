@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.3.1
+// @version      0.3.2
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -45,7 +45,7 @@
     MAX_RUN_MS: 30000,
     // DOM 变化后的防抖间隔（毫秒）
     DEBOUNCE_MS: 400,
-    // 是否显示右下角「展开全部评论」按钮
+    // 是否显示右下角「展开评论」按钮
     SHOW_PANEL: true,
   };
   /* ------------------------------------------------------------------- */
@@ -159,7 +159,7 @@
   async function run() {
     if (running) return;
     running = true;
-    setStatus('展开中…', 'busy');
+    setStatus('展开中', 'busy');
     suppressScroll();
 
     const startedAt = Date.now();
@@ -178,7 +178,7 @@
           target.click();
           expandedCount++;
           clickedInRound++;
-          setStatus('展开中… ' + expandedCount, 'busy');
+          setStatus('展开中 ' + expandedCount, 'busy');
           await sleep(CONFIG.CLICK_INTERVAL_MS);
         }
 
@@ -190,7 +190,7 @@
       running = false;
     }
 
-    setStatus(expandedCount ? '已展开 ' + expandedCount + ' 处' : '暂无折叠内容', expandedCount ? 'ok' : 'idle');
+    setStatus(expandedCount ? '已展开 ' + expandedCount : '无折叠', expandedCount ? 'ok' : 'idle');
   }
 
   function schedule() {
@@ -218,8 +218,8 @@
       'z-index:2147483000',
       'display:flex',
       'align-items:center',
-      'gap:8px',
-      'padding:6px 10px',
+      'gap:6px',
+      'padding:5px 9px',
       'border-radius:8px',
       'background:rgba(32,33,36,.92)',
       'color:#fff',
@@ -232,10 +232,10 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'pce-drag-exclude';
-    btn.textContent = '展开全部评论';
+    btn.textContent = '展开评论';
     btn.title = '展开本页所有被折叠的评论（轻点展开；按住拖动可移动面板）';
     btn.style.cssText = [
-      'padding:5px 10px',
+      'padding:4px 9px',
       'border:0',
       'border-radius:6px',
       'background:#4c8bf5',
@@ -275,7 +275,7 @@
 
   // 让面板可拖动（鼠标 + 触摸），面板上任意位置（含按钮）都能作为拖动起点：
   // 移动超过阈值判定为拖动，松手后吞掉紧随的 click 并把位置持久化到 GM 存储；
-  // 未移动（轻点）则不拦截，按钮点击正常触发「展开全部评论」。位置限制在视口内。
+  // 未移动（轻点）则不拦截，按钮点击正常触发「展开评论」。位置限制在视口内。
   function makeDraggable(el) {
     let dragging = false;
     let startedOnButton = false;
