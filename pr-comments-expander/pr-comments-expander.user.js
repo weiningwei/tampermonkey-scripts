@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.2.2
+// @version      0.3.0
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -52,8 +52,10 @@
 
   const AUTO_KEY = 'prCommentsExpander.autoExpand';
   const DONE_ATTR = 'data-pce-done';
+  const PANEL_POS_KEY = 'prCommentsExpander.panelPos';
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
 
   let autoExpand = CONFIG.AUTO_EXPAND;
   let running = false;
@@ -211,8 +213,8 @@
     panel.id = 'pr-comments-expander-panel';
     panel.style.cssText = [
       'position:fixed',
-      'right:16px',
-      'bottom:16px',
+      'left:auto',
+      'top:auto',
       'z-index:2147483000',
       'display:flex',
       'align-items:center',
@@ -224,12 +226,14 @@
       'font:12px/1.4 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif',
       'box-shadow:0 2px 10px rgba(0,0,0,.3)',
       'user-select:none',
+      'cursor:move',
     ].join(';');
 
     const btn = document.createElement('button');
     btn.type = 'button';
+    btn.className = 'pce-drag-exclude';
     btn.textContent = '展开全部评论';
-    btn.title = '展开本页所有被折叠的评论';
+    btn.title = '展开本页所有被折叠的评论（拖动面板空白处可移动位置）';
     btn.style.cssText = [
       'padding:5px 10px',
       'border:0',
@@ -247,7 +251,97 @@
     panel.appendChild(btn);
     panel.appendChild(statusEl);
     document.body.appendChild(panel);
+    makeDraggable(panel);
+    positionPanel();
   }
+
+  // 面板初始位置：优先读取上次拖动后的位置，否则默认右下角
+  function positionPanel() {
+    if (!panel) return;
+    const saved = GM_getValue(PANEL_POS_KEY, null);
+    if (saved && saved.left && saved.top) {
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      panel.style.left = saved.left;
+      panel.style.top = saved.top;
+      return;
+    }
+    const rect = panel.getBoundingClientRect();
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = clamp(window.innerWidth - rect.width - 16, 4, window.innerWidth - rect.width - 4) + 'px';
+    panel.style.top = clamp(window.innerHeight - rect.height - 16, 4, window.innerHeight - rect.height - 4) + 'px';
+  }
+
+  // 让面板可拖动（鼠标 + 触摸），拖动起点在按钮上时不触发（保证按钮点击可用），
+  // 松手后把位置持久化到 GM 存储，下次打开仍在原位；位置会被限制在视口内。
+  function makeDraggable(el) {
+    let dragging = false;
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0, moved = false;
+
+    const pointOf = (e) =>
+      e.touches && e.touches.length
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.clientX, y: e.clientY };
+
+    function onDown(e) {
+      if (e.target.closest('.pce-drag-exclude')) return; // 按钮区不拖动
+      if (e.button !== undefined && e.button !== 0) return; // 仅左键
+      dragging = true;
+      moved = false;
+      const p = pointOf(e);
+      startX = p.x; startY = p.y;
+      const rect = el.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.left = startLeft + 'px';
+      el.style.top = startTop + 'px';
+      el.style.cursor = 'grabbing';
+      document.addEventListener('mousemove', onMove, { passive: false });
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      const p = pointOf(e);
+      const dx = p.x - startX;
+      const dy = p.y - startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      const w = el.offsetWidth, h = el.offsetHeight;
+      el.style.left = clamp(startLeft + dx, 4, window.innerWidth - w - 4) + 'px';
+      el.style.top = clamp(startTop + dy, 4, window.innerHeight - h - 4) + 'px';
+      if (e.cancelable) e.preventDefault();
+    }
+
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      el.style.cursor = 'move';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      if (moved) GM_setValue(PANEL_POS_KEY, { left: el.style.left, top: el.style.top });
+    }
+
+    el.addEventListener('mousedown', onDown);
+    el.addEventListener('touchstart', onDown, { passive: false });
+  }
+
+  // 视口尺寸变化时把面板重新夹回视口内，避免跑到屏幕外
+  window.addEventListener('resize', () => {
+    if (!panel || panel.style.display === 'none') return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const left = parseFloat(panel.style.left) || 0;
+    const top = parseFloat(panel.style.top) || 0;
+    panel.style.left = clamp(left, 4, window.innerWidth - w - 4) + 'px';
+    panel.style.top = clamp(top, 4, window.innerHeight - h - 4) + 'px';
+  });
 
   // 面板只在 PR 详情页显示；站内跳转进出 PR 页时随之创建 / 隐藏
   function syncPanel() {
