@@ -2,6 +2,11 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.5.0] - 2026-09-26
+
+### Changed
+- 移除菜单统计中的累计转换耗时（`performance.now` 计时在防抖合并后无法准确归因单次转换，数值不准），菜单项与弹窗只显示已转换链接数量；同步删除 `formatMs` 与 `STATS.totalMs`。
+
 ## [1.4.3] - 2026-08-30
 
 ### Changed
