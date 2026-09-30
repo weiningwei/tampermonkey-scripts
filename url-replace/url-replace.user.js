@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.12.1
-// @description  网址包含指定字符串时双向切换，并通过按钮在新标签页打开切换后的网址；支持动态增删规则。
+// @version      0.13.0
+// @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
@@ -19,9 +19,11 @@
   /* ----------------------------- 可配置项 ----------------------------- */
   const CONFIG = {
     // 默认替换规则：仅首次运行时作为初始值写入存储，之后以页面内增删为准。
+    // 同一 from 可对应多个 to（一对多），命中时每个目标各渲染一个按钮。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
       { from: 'github', to: 'github1s' },
+      { from: 'github', to: 'gitdiagram' },
     ],
     // 按钮文案模板：{from}、{to} 为规则原串；{arrow} 为 →（正向）或 ←（反向）
     BUTTON_TEXT: '{from} {arrow} {to}',
@@ -57,39 +59,45 @@
   let rules = loadRules();
   let collapsed = GM_getValue(COLLAPSED_KEY, false) === true;
 
-  // 判断切换方向：返回 { from, to, forward, url }，无匹配返回 null
+  // 检测当前页面可用的切换目标：返回 [{ from, to, forward, url }]，无命中返回 []。
   // 仅针对域名（hostname）匹配与替换，路径 / 查询 / 哈希保持不变。
-  // from/to 始终为规则原串；forward=true 表示正向（from→to），false 表示反向（to→from）。
-  // 当 from 与 to 同时命中（一方是另一方子串，如 github 与 github1s）时，取较长者作为当前串。
-  function detectSwitch() {
+  // 一对多：先汇总所有规则的 from/to 字符串，取 hostname 命中的「最长者」作为当前串——
+  // 这样 github / github1s / gitdiagram 等互为子串的域名在任一站点上都能正确识别自己，
+  // 然后列出所有以当前串为一侧的规则：from 命中为正向（from→to，每个 to 一个按钮），
+  // to 命中为反向（to→from）。命中的非最长串不参与，避免子串误判。
+  function detectMatches() {
     let u;
     try {
       u = new URL(location.href);
     } catch (e) {
-      return null;
+      return [];
     }
     const host = u.hostname;
+    const strings = new Set();
     for (const rule of rules) {
       if (!isValidRule(rule)) continue;
-      const { from, to } = rule;
-      const hasFrom = host.includes(from);
-      const hasTo = host.includes(to);
-      if (!hasFrom && !hasTo) continue;
-      let cur, target;
-      if (hasFrom && hasTo) {
-        // 同时命中：取较长者（更具体）作为当前串；长度相等时按 from → to
-        if (from.length >= to.length) { cur = from; target = to; }
-        else { cur = to; target = from; }
-      } else if (hasFrom) {
-        cur = from; target = to;
-      } else {
-        cur = to; target = from;
-      }
-      const forward = cur === from;
-      u.hostname = host.replaceAll(cur, target);
-      return { from, to, forward, url: u.href };
+      strings.add(rule.from);
+      strings.add(rule.to);
     }
-    return null;
+    const hits = Array.from(strings).filter(s => host.includes(s));
+    if (!hits.length) return [];
+    const current = hits.sort((a, b) => b.length - a.length)[0];
+    const matches = [];
+    const seen = new Set();
+    for (const rule of rules) {
+      if (!isValidRule(rule)) continue;
+      let forward;
+      if (rule.from === current) forward = true;
+      else if (rule.to === current) forward = false;
+      else continue;
+      const key = (forward ? 'F:' : 'R:') + rule.from + '>' + rule.to;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const target = forward ? rule.to : rule.from;
+      u.hostname = host.replaceAll(current, target);
+      matches.push({ from: rule.from, to: rule.to, forward, url: u.href });
+    }
+    return matches;
   }
 
   function escapeHtml(s) {
@@ -115,17 +123,16 @@
       .replaceAll('{arrow}', arrowHtml);
   }
 
-  // 打开切换后的网址（无匹配时提示）
-  function openReplaced() {
-    const sw = detectSwitch();
-    if (!sw) {
+  // 打开切换后的网址（url 由各按钮自带；无匹配时提示）
+  function openReplaced(url) {
+    if (!url) {
       alert('当前网址未命中任何替换规则。');
       return;
     }
     if (CONFIG.OPEN_IN_NEW_TAB) {
-      window.open(sw.url, '_blank');
+      window.open(url, '_blank');
     } else {
-      location.href = sw.url;
+      location.href = url;
     }
   }
 
@@ -141,11 +148,9 @@
     'box-shadow:0 2px 8px rgba(0,0,0,.25)',
   ].join(';');
 
-  // 切换按钮（文案随规则变化）
-  const switchBtn = document.createElement('button');
-  switchBtn.type = 'button';
-  switchBtn.style.cssText = BASE_BUTTON_STYLE;
-  switchBtn.addEventListener('click', openReplaced);
+  // 切换按钮容器：一对多时并列渲染多个按钮（每个目标一个）
+  const switchWrap = document.createElement('div');
+  switchWrap.style.cssText = 'display:flex;gap:8px;align-items:center;';
 
   // 齿轮按钮：开关规则管理面板
   const gearBtn = document.createElement('button');
@@ -267,6 +272,10 @@
       alert('from 与 to 不能为空。');
       return;
     }
+    if (rules.some(r => r.from === from && r.to === to)) {
+      alert('该规则已存在。');
+      return;
+    }
     rules.push({ from, to });
     saveRules();
     fromInput.value = '';
@@ -289,37 +298,46 @@
   }
   resetBtn.addEventListener('click', resetRules);
 
-  // 刷新切换按钮与规则列表
+  // 刷新切换按钮组与规则列表
   function refresh() {
-    const sw = detectSwitch();
-    if (sw) {
-      switchBtn.innerHTML = formatLabel(sw);
-      switchBtn.title = sw.url;
-      switchBtn.style.display = '';
+    const matches = detectMatches();
+    switchWrap.textContent = '';
+    if (matches.length) {
+      for (const m of matches) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.style.cssText = BASE_BUTTON_STYLE;
+        btn.innerHTML = formatLabel(m);
+        btn.title = m.url;
+        btn.addEventListener('click', () => openReplaced(m.url));
+        switchWrap.appendChild(btn);
+      }
     } else if (CONFIG.ALWAYS_SHOW) {
-      switchBtn.textContent = '未命中规则';
-      switchBtn.title = '';
-      switchBtn.style.display = '';
-    } else {
-      switchBtn.style.display = 'none';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.style.cssText = BASE_BUTTON_STYLE;
+      btn.textContent = '未命中规则';
+      switchWrap.appendChild(btn);
     }
-    applyCollapsed();
+    applyCollapsed(matches.length > 0 || CONFIG.ALWAYS_SHOW);
     if (panel.style.display === 'block') renderList();
   }
 
   // 底部工具栏：切换按钮 + 齿轮按钮（可拖动，位置持久化）
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
-  bar.append(switchBtn, gearBtn, toggleBtn);
+  bar.append(switchWrap, gearBtn, toggleBtn);
 
   // 根据收起状态切换按钮显示：收起时仅保留把手，展开时恢复
-  function applyCollapsed() {
+  // showSwitch：是否存在可显示的切换按钮；display 需显式用 flex/none（cssText 中的 flex 布局依赖它）
+  function applyCollapsed(showSwitch) {
     if (collapsed) {
-      switchBtn.style.display = 'none';
+      switchWrap.style.display = 'none';
       gearBtn.style.display = 'none';
       toggleBtn.textContent = '«';
       toggleBtn.title = '展开';
     } else {
+      switchWrap.style.display = showSwitch ? 'flex' : 'none';
       gearBtn.style.display = '';
       toggleBtn.textContent = '»';
       toggleBtn.title = '收起';

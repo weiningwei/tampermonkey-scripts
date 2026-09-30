@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.13.0] - 2026-10-01
+
+### Added
+
+- 支持一对多：同一 `from` 可对应多个 `to`（如 `github` → `github1s` 与 `github` → `gitdiagram`），命中时并列渲染多个切换按钮，每个目标一个、单击直达。默认规则新增 `github → gitdiagram`。
+
+### Changed
+
+- 当前站判定改为**全局最长命中**：汇总所有规则的 `from`/`to`，取 hostname 命中的最长者作为当前串，仅渲染以当前串为一侧的规则。修复多条规则共享子串（github / github1s / gitdiagram）时旧逻辑「逐条独立判定」导致的误匹配。
+- 规则添加时校验重复（相同 from + to 不再重复入库）；`CONFIG.REPLACEMENTS` 仅影响首次初始化，「重置为默认」可获得新的默认规则。
+
 ## [0.12.1] - 2026-08-30
 
 ### Changed
