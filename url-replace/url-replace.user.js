@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.13.0
+// @version      0.13.1
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -148,9 +148,9 @@
     'box-shadow:0 2px 8px rgba(0,0,0,.25)',
   ].join(';');
 
-  // 切换按钮容器：一对多时并列渲染多个按钮（每个目标一个）
+  // 切换按钮容器：一对多时纵向堆叠多个按钮（每个目标一个，等宽对齐）
   const switchWrap = document.createElement('div');
-  switchWrap.style.cssText = 'display:flex;gap:8px;align-items:center;';
+  switchWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;';
 
   // 齿轮按钮：开关规则管理面板
   const gearBtn = document.createElement('button');
