@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.15.0
+// @version      0.16.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -22,6 +22,7 @@
     // 默认替换规则：首次运行作为初始值写入存储；之后更新脚本时，新增的默认规则
     // 会自动合并进存储（你在页面上删过的默认规则不会被复活），其余以页面内增删为准。
     // 同一 from 可对应多个 to（一对多），命中时每个目标各渲染一个按钮。
+    // 每条规则支持 enabled 开关（在管理面板勾选/取消），停用的规则不参与匹配。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
       { from: 'github', to: 'github1s' },
@@ -44,13 +45,14 @@
       && r.from !== '' && r.to !== '';
   }
 
-  // 读取规则：优先取存储值；首次运行用 CONFIG 初始化
+  // 读取规则：优先取存储值；首次运行用 CONFIG 初始化。
+  // 统一补全 enabled 字段（旧存储无此字段视为启用）
   function loadRules() {
     const stored = GM_getValue(STORAGE_KEY, null);
     if (Array.isArray(stored)) {
-      return stored.filter(isValidRule);
+      return stored.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: r.enabled !== false }));
     }
-    return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to }));
+    return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: true }));
   }
 
   // 读取被删除过的默认规则列表
@@ -69,7 +71,7 @@
       const key = r.from + '>' + r.to;
       if (deleted.has(key)) continue;
       if (rules.some(x => x.from === r.from && x.to === r.to)) continue;
-      rules.push({ from: r.from, to: r.to });
+      rules.push({ from: r.from, to: r.to, enabled: true });
       changed = true;
     }
     if (changed) saveRules();
@@ -98,7 +100,7 @@
     const host = u.hostname;
     const strings = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule)) continue;
+      if (!isValidRule(rule) || rule.enabled === false) continue; // 停用的规则不参与匹配
       strings.add(rule.from);
       strings.add(rule.to);
     }
@@ -108,7 +110,7 @@
     const matches = [];
     const seen = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule)) continue;
+      if (!isValidRule(rule) || rule.enabled === false) continue;
       let forward;
       if (rule.from === current) forward = true;
       else if (rule.to === current) forward = false;
@@ -243,18 +245,34 @@
 
   gearBtn.addEventListener('click', togglePanel);
 
-  // 渲染规则列表
+  // 渲染规则列表（每行：启用勾选 + 规则文案 + 删除）
   function renderList() {
     listEl.textContent = '';
     rules.forEach((rule, i) => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;';
+      const left = document.createElement('div');
+      left.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:0;';
+      const enabledBox = document.createElement('input');
+      enabledBox.type = 'checkbox';
+      enabledBox.checked = rule.enabled !== false;
+      enabledBox.title = enabledBox.checked ? '停用该规则（不参与匹配）' : '启用该规则';
+      enabledBox.style.cssText = 'cursor:pointer;accent-color:#1a73e8;flex-shrink:0;';
+      enabledBox.addEventListener('change', () => {
+        rule.enabled = enabledBox.checked;
+        saveRules();
+        refresh();
+      });
       const label = document.createElement('span');
       label.textContent = rule.from + ' → ' + rule.to;
+      if (rule.enabled === false) {
+        label.style.cssText = 'color:#999;text-decoration:line-through;'; // 停用的规则置灰加删除线
+      }
+      left.append(enabledBox, label);
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.textContent = '删除';
-      delBtn.style.cssText = 'padding:2px 8px;color:#d93025;background:none;border:1px solid #d93025;border-radius:4px;cursor:pointer;';
+      delBtn.style.cssText = 'padding:2px 8px;color:#d93025;background:none;border:1px solid #d93025;border-radius:4px;cursor:pointer;flex-shrink:0;';
       delBtn.addEventListener('click', () => {
         // 若删除的是默认规则，记入已删除列表，避免自动合并时被重新加回
         const key = rule.from + '>' + rule.to;
@@ -269,7 +287,7 @@
         saveRules();
         refresh();
       });
-      row.append(label, delBtn);
+      row.append(left, delBtn);
       listEl.appendChild(row);
     });
     if (rules.length === 0) {
@@ -308,7 +326,7 @@
   // 重置为默认规则
   function resetRules() {
     if (!confirm('确定清空所有规则并恢复默认值吗？')) return;
-    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to }));
+    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: true }));
     GM_setValue(DELETED_DEFAULTS_KEY, []); // 重置即恢复全部默认规则，清空已删除记录
     saveRules();
     refresh();
