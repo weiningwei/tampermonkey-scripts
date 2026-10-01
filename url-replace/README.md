@@ -34,7 +34,7 @@
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }, { from: 'github', to: 'github1s' }, { from: 'github', to: 'gitdiagram' }]` | 初始默认规则；仅在首次运行时写入存储，之后以页面内增删为准 |
+| `REPLACEMENTS` | `[{ from: 'gitcode', to: 'atomgit' }, { from: 'github', to: 'github1s' }, { from: 'github', to: 'gitdiagram' }]` | 初始默认规则；首次运行时写入存储，脚本更新后新增的默认规则自动合并进存储（删除过的默认规则不会复活），其余以页面内增删为准 |
 | `BUTTON_TEXT` | `'{from} {arrow} {to}'` | 按钮文案模板；`{from}`、`{to}` 为规则原串，`{arrow}` 为 `→`（正向）或 `←`（反向） |
 | `ALWAYS_SHOW` | `false` | 无匹配时是否仍显示切换按钮 |
 | `OPEN_IN_NEW_TAB` | `true` | 是否在新标签页打开（`false` 则当前页跳转） |
@@ -59,7 +59,7 @@ REPLACEMENTS: [
 - 面板顶部为当前规则列表，每条规则右侧有「删除」按钮；下方两个输入框分别填写 `from` 与 `to`，点击「添加」（或回车）即可新增规则。
 - 面板右上角「重置为默认」按钮：一键清空所有规则，恢复为 `CONFIG.REPLACEMENTS` 的默认值。
 - 新增/删除/重置立即生效，并写入 `GM_setValue` 全局存储，跨站点（例如 gitcode.com 与 atomgit.com 之间）共享，刷新页面后仍然保留。
-- `CONFIG.REPLACEMENTS` 仅在首次运行时作为初始规则写入；之后以页面内增删的结果为准。
+- `CONFIG.REPLACEMENTS` 在首次运行时作为初始规则写入；之后脚本更新时，CONFIG 中新增的默认规则会**自动合并**进存储（无需重置）——但你在页面上删除过的默认规则会被记住，不会自动复活；其余仍以页面内增删的结果为准。「重置为默认」会恢复全部默认规则并清空删除记录。
 
 ## 注意事项
 

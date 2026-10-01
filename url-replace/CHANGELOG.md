@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.14.0] - 2026-10-01
+
+### Added
+
+- 脚本更新后，`CONFIG.REPLACEMENTS` 中新增的默认规则自动合并进存储，无需「重置为默认」即可生效；在页面上删除过的默认规则会被记录，不会被自动复活。「重置为默认」恢复全部默认规则并清空删除记录。
+
 ## [0.13.1] - 2026-10-01
 
 ### Changed

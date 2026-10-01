@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.13.1
+// @version      0.14.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -18,7 +18,8 @@
 
   /* ----------------------------- 可配置项 ----------------------------- */
   const CONFIG = {
-    // 默认替换规则：仅首次运行时作为初始值写入存储，之后以页面内增删为准。
+    // 默认替换规则：首次运行作为初始值写入存储；之后更新脚本时，新增的默认规则
+    // 会自动合并进存储（你在页面上删过的默认规则不会被复活），其余以页面内增删为准。
     // 同一 from 可对应多个 to（一对多），命中时每个目标各渲染一个按钮。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
@@ -37,6 +38,8 @@
   const STORAGE_KEY = 'url-replace.rules';
   const POS_KEY = 'url-replace.buttonPos';
   const COLLAPSED_KEY = 'url-replace.collapsed';
+  // 记录用户在页面上删除过的默认规则（from>to），自动合并时不再复活它们
+  const DELETED_DEFAULTS_KEY = 'url-replace.deletedDefaults';
 
   function isValidRule(r) {
     return r && typeof r.from === 'string' && typeof r.to === 'string'
@@ -52,11 +55,34 @@
     return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to }));
   }
 
+  // 读取被删除过的默认规则列表
+  function loadDeletedDefaults() {
+    const d = GM_getValue(DELETED_DEFAULTS_KEY, null);
+    return Array.isArray(d) ? d : [];
+  }
+
+  // 把 CONFIG 中存储里还没有的默认规则自动补进去（脚本更新后新增默认规则即可生效），
+  // 用户删过的默认规则（在 DELETED_DEFAULTS_KEY 中）不会被重新加回。
+  function mergeNewDefaults() {
+    const deleted = new Set(loadDeletedDefaults());
+    let changed = false;
+    for (const r of CONFIG.REPLACEMENTS) {
+      if (!isValidRule(r)) continue;
+      const key = r.from + '>' + r.to;
+      if (deleted.has(key)) continue;
+      if (rules.some(x => x.from === r.from && x.to === r.to)) continue;
+      rules.push({ from: r.from, to: r.to });
+      changed = true;
+    }
+    if (changed) saveRules();
+  }
+
   function saveRules() {
     GM_setValue(STORAGE_KEY, rules);
   }
 
   let rules = loadRules();
+  mergeNewDefaults();
   let collapsed = GM_getValue(COLLAPSED_KEY, false) === true;
 
   // 检测当前页面可用的切换目标：返回 [{ from, to, forward, url }]，无命中返回 []。
@@ -249,6 +275,15 @@
       delBtn.textContent = '删除';
       delBtn.style.cssText = 'padding:2px 8px;color:#d93025;background:none;border:1px solid #d93025;border-radius:4px;cursor:pointer;';
       delBtn.addEventListener('click', () => {
+        // 若删除的是默认规则，记入已删除列表，避免自动合并时被重新加回
+        const key = rule.from + '>' + rule.to;
+        if (CONFIG.REPLACEMENTS.some(r => r.from === rule.from && r.to === rule.to)) {
+          const deleted = loadDeletedDefaults();
+          if (!deleted.includes(key)) {
+            deleted.push(key);
+            GM_setValue(DELETED_DEFAULTS_KEY, deleted);
+          }
+        }
         rules.splice(i, 1);
         saveRules();
         refresh();
@@ -293,6 +328,7 @@
   function resetRules() {
     if (!confirm('确定清空所有规则并恢复默认值吗？')) return;
     rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to }));
+    GM_setValue(DELETED_DEFAULTS_KEY, []); // 重置即恢复全部默认规则，清空已删除记录
     saveRules();
     refresh();
   }
