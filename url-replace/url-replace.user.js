@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.14.2
+// @version      0.15.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -9,6 +9,7 @@
 // @noframes
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @license      MIT
 // @icon         https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f501.png
 // ==/UserScript==
@@ -28,8 +29,6 @@
     ],
     // 按钮文案模板：{from}、{to} 为规则原串；{arrow} 为 →（正向）或 ←（反向）
     BUTTON_TEXT: '{from} {arrow} {to}',
-    // 是否在无匹配时也显示切换按钮（false：仅当存在匹配规则时才显示）
-    ALWAYS_SHOW: false,
     // 是否在新标签页打开（true）；false 则在当前页跳转
     OPEN_IN_NEW_TAB: true,
   };
@@ -37,7 +36,6 @@
 
   const STORAGE_KEY = 'url-replace.rules';
   const POS_KEY = 'url-replace.buttonPos';
-  const COLLAPSED_KEY = 'url-replace.collapsed';
   // 记录用户在页面上删除过的默认规则（from>to），自动合并时不再复活它们
   const DELETED_DEFAULTS_KEY = 'url-replace.deletedDefaults';
 
@@ -83,9 +81,6 @@
 
   let rules = loadRules();
   mergeNewDefaults();
-  // 收起偏好：仅在未命中任何规则的页面上生效（尽量不挡页面）；
-  // 命中规则的页面切换按钮始终自动展开显示，无需手动点把手。
-  let collapsed = GM_getValue(COLLAPSED_KEY, false) === true;
 
   // 检测当前页面可用的切换目标：返回 [{ from, to, forward, url }]，无命中返回 []。
   // 仅针对域名（hostname）匹配与替换，路径 / 查询 / 哈希保持不变。
@@ -187,26 +182,7 @@
   gearBtn.title = '管理规则';
   gearBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#5f6368;padding:10px 12px;';
 
-  // 收起/展开切换按钮：条状小把手，收起后仅保留此把手，避免遮挡页面
-  const toggleBtn = document.createElement('button');
-  toggleBtn.type = 'button';
-  toggleBtn.title = '收起';
-  toggleBtn.style.cssText = [
-    'background:#3c4043',
-    'border:none',
-    'border-radius:6px',
-    'cursor:pointer',
-    'box-shadow:0 2px 8px rgba(0,0,0,.25)',
-    'color:#fff',
-    'width:20px',
-    'height:40px',
-    'padding:0',
-    'display:flex',
-    'align-items:center',
-    'justify-content:center',
-    'font-size:16px',
-    'line-height:1',
-  ].join(';');
+  // 收起/展开把手已移除（v0.15.0）：未命中页面工具栏整体不注入，无需收起；命中页面按钮少且可拖动。
 
   // 规则管理面板
   const panel = document.createElement('div');
@@ -255,7 +231,7 @@
 
   panel.append(panelHeader, listEl, formRow);
 
-  // 开关规则管理面板（齿轮点击 / 把手右键共用）
+  // 开关规则管理面板（齿轮点击 / 工具栏右键 / 油猴菜单共用）
   function togglePanel() {
     const show = panel.style.display === 'none';
     panel.style.display = show ? 'block' : 'none';
@@ -339,73 +315,40 @@
   }
   resetBtn.addEventListener('click', resetRules);
 
-  // 刷新切换按钮组与规则列表
+  // 刷新切换按钮组：命中规则时显示工具栏（目标按钮 + 齿轮），未命中时整体隐藏（零打扰）
   function refresh() {
     const matches = detectMatches();
     switchWrap.textContent = '';
-    if (matches.length) {
-      for (const m of matches) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.style.cssText = BASE_BUTTON_STYLE;
-        btn.innerHTML = formatLabel(m);
-        btn.title = m.url;
-        btn.addEventListener('click', () => openReplaced(m.url));
-        switchWrap.appendChild(btn);
-      }
-    } else if (CONFIG.ALWAYS_SHOW) {
+    bar.style.display = matches.length ? 'flex' : 'none';
+    for (const m of matches) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.style.cssText = BASE_BUTTON_STYLE;
-      btn.textContent = '未命中规则';
+      btn.innerHTML = formatLabel(m);
+      btn.title = m.url;
+      btn.addEventListener('click', () => openReplaced(m.url));
       switchWrap.appendChild(btn);
     }
-    applyCollapsed(matches.length > 0 || CONFIG.ALWAYS_SHOW);
     if (panel.style.display === 'block') renderList();
   }
 
   // 底部工具栏：切换按钮 + 齿轮按钮（可拖动，位置持久化）
+  // 初始 display:none，由 refresh() 按命中情况显式设为 flex/none
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
-  bar.append(switchWrap, gearBtn, toggleBtn);
+  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:none;gap:8px;align-items:center;user-select:none;touch-action:none;';
+  bar.append(switchWrap, gearBtn);
 
-  // 控制工具栏各按钮的显示：命中规则（showSwitch=true）时只显示切换按钮 + 把手（齿轮隐藏，
-  // 避免自动展开时多一个与当前操作无关的按钮）；未命中时按收起偏好决定显示齿轮还是只留把手。
-  // 齿轮隐藏后，任意页面可右键点把手打开规则管理面板（兜底入口）。
-  // display 需显式用 flex/none（cssText 中的 flex 布局依赖它）
-  function applyCollapsed(showSwitch) {
-    if (showSwitch) {
-      switchWrap.style.display = 'flex';
-      gearBtn.style.display = 'none';
-      toggleBtn.textContent = '»';
-      toggleBtn.title = '收起（右键管理规则）';
-    } else if (collapsed) {
-      switchWrap.style.display = 'none';
-      gearBtn.style.display = 'none';
-      toggleBtn.textContent = '«';
-      toggleBtn.title = '展开（右键管理规则）';
-    } else {
-      switchWrap.style.display = 'none';
-      gearBtn.style.display = '';
-      toggleBtn.textContent = '»';
-      toggleBtn.title = '收起（右键管理规则）';
-    }
-  }
-
-  toggleBtn.addEventListener('click', () => {
-    collapsed = !collapsed;
-    // 收起偏好仅在未命中的页面上持久化；命中页面上收起只对当前页临时生效（下次导航自动展开）
-    if (detectMatches().length === 0) {
-      GM_setValue(COLLAPSED_KEY, collapsed);
-    }
-    if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
-    refresh();
-  });
-
-  // 右键把手：任意页面打开/关闭规则管理面板（齿轮隐藏时的兜底入口）
-  toggleBtn.addEventListener('contextmenu', (e) => {
+  // 右键工具栏任意位置：打开/关闭规则管理面板（与齿轮等效的快捷入口）
+  bar.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     togglePanel();
+  });
+
+  // 点击面板与工具栏以外的任意位置，自动关闭面板（符合常见弹层习惯）
+  document.addEventListener('pointerdown', (e) => {
+    if (panel.style.display !== 'block') return;
+    if (panel.contains(e.target) || bar.contains(e.target)) return;
+    panel.style.display = 'none';
   });
 
   // 将工具栏定位到距视口右下角 (right, bottom) 的位置（left/top 置为 auto 以让 right/bottom 生效），并限制在视口内
@@ -432,18 +375,25 @@
     }
   }
 
-  // 让规则管理面板始终显示在工具栏附近（默认上方，空间不足时放到下方）
+  // 让规则管理面板显示在工具栏上方（空间不足时放到下方）；
+  // 工具栏未显示时（未命中页面经油猴菜单打开），面板放到视口右下角
   function positionPanel() {
     const gap = 8;
-    const rect = bar.getBoundingClientRect();
     const pw = panel.offsetWidth || 280;
     const ph = panel.offsetHeight || 0;
-    let left = rect.right - pw; // 默认右缘与工具栏右缘对齐
-    if (left < gap) left = gap;
-    if (left + pw > window.innerWidth - gap) left = window.innerWidth - pw - gap;
-    let top = rect.top - gap - ph; // 默认在工具栏上方
-    if (top < gap) top = rect.bottom + gap; // 上方空间不足则放到下方
-    if (top + ph > window.innerHeight - gap) top = window.innerHeight - ph - gap;
+    let left, top;
+    if (bar.style.display === 'none') {
+      left = window.innerWidth - pw - gap;
+      top = window.innerHeight - ph - gap;
+    } else {
+      const rect = bar.getBoundingClientRect();
+      left = rect.right - pw; // 默认右缘与工具栏右缘对齐
+      if (left < gap) left = gap;
+      if (left + pw > window.innerWidth - gap) left = window.innerWidth - pw - gap;
+      top = rect.top - gap - ph; // 默认在工具栏上方
+      if (top < gap) top = rect.bottom + gap; // 上方空间不足则放到下方
+      if (top + ph > window.innerHeight - gap) top = window.innerHeight - ph - gap;
+    }
     panel.style.left = left + 'px';
     panel.style.top = top + 'px';
     panel.style.right = 'auto';
@@ -520,6 +470,8 @@
     watchUrlChange();
     document.body.appendChild(bar);
     document.body.appendChild(panel);
+    // 油猴扩展菜单入口：任意页面（含未命中页）都能打开规则管理面板
+    GM_registerMenuCommand('管理规则', togglePanel);
     applySavedPos();
     refresh();
   }
