@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.16.2
+// @version      0.17.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -23,10 +23,12 @@
     // 会自动合并进存储（你在页面上删过的默认规则不会被复活），其余以页面内增删为准。
     // 同一 from 可对应多个 to（一对多），命中时每个目标各渲染一个按钮。
     // 每条规则支持 enabled 开关（在管理面板勾选/取消），停用的规则不参与匹配。
+    // 可选 maxDepth：路径段数上限（pathname 按 / 分段），超过则视为子网页、不显示按钮。
+    // 例如 github 仓库页 /{owner}/{repo} 为 2 段（显示），/blob/... 文件页为 5 段（不显示）。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
-      { from: 'github', to: 'github1s' },
-      { from: 'github', to: 'gitdiagram' },
+      { from: 'github', to: 'github1s', maxDepth: 2 },
+      { from: 'github', to: 'gitdiagram', maxDepth: 2 },
     ],
     // 是否在新标签页打开（true）；false 则在当前页跳转
     OPEN_IN_NEW_TAB: true,
@@ -44,13 +46,26 @@
   }
 
   // 读取规则：优先取存储值；首次运行用 CONFIG 初始化。
-  // 统一补全 enabled 字段（旧存储无此字段视为启用）
+  // 统一补全字段：enabled 缺失视为启用；maxDepth 仅保留合法的非负整数，其余视为不限
+  function normalizeMaxDepth(v) {
+    return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined;
+  }
   function loadRules() {
     const stored = GM_getValue(STORAGE_KEY, null);
     if (Array.isArray(stored)) {
-      return stored.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: r.enabled !== false }));
+      return stored.filter(isValidRule).map(r => ({
+        from: r.from,
+        to: r.to,
+        enabled: r.enabled !== false,
+        maxDepth: normalizeMaxDepth(r.maxDepth),
+      }));
     }
-    return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: true }));
+    return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
+      from: r.from,
+      to: r.to,
+      enabled: true,
+      maxDepth: normalizeMaxDepth(r.maxDepth),
+    }));
   }
 
   // 读取被删除过的默认规则列表
@@ -61,6 +76,7 @@
 
   // 把 CONFIG 中存储里还没有的默认规则自动补进去（脚本更新后新增默认规则即可生效），
   // 用户删过的默认规则（在 DELETED_DEFAULTS_KEY 中）不会被重新加回。
+  // 另外若存储里的默认规则缺 maxDepth 而 CONFIG 里有（脚本更新新增的限制），自动补上。
   function mergeNewDefaults() {
     const deleted = new Set(loadDeletedDefaults());
     let changed = false;
@@ -68,8 +84,17 @@
       if (!isValidRule(r)) continue;
       const key = r.from + '>' + r.to;
       if (deleted.has(key)) continue;
-      if (rules.some(x => x.from === r.from && x.to === r.to)) continue;
-      rules.push({ from: r.from, to: r.to, enabled: true });
+      const existing = rules.find(x => x.from === r.from && x.to === r.to);
+      if (existing) {
+        // 已有规则：仅补缺失的 maxDepth（用户在添加时未填，而新版本默认值带上了）
+        const md = normalizeMaxDepth(r.maxDepth);
+        if (md !== undefined && existing.maxDepth === undefined) {
+          existing.maxDepth = md;
+          changed = true;
+        }
+        continue;
+      }
+      rules.push({ from: r.from, to: r.to, enabled: true, maxDepth: normalizeMaxDepth(r.maxDepth) });
       changed = true;
     }
     if (changed) saveRules();
@@ -96,9 +121,14 @@
       return [];
     }
     const host = u.hostname;
+    // 当前路径段数：pathname 按 / 分段去空（/{owner}/{repo} → 2，/{owner}/{repo}/blob/main/x.md → 5），
+    // 用于规则的可选 maxDepth 限制：超过上限视为子网页，规则不参与匹配（按钮不显示）
+    const pathDepth = u.pathname.split('/').filter(Boolean).length;
+    const isHiddenByDepth = (rule) =>
+      typeof rule.maxDepth === 'number' && pathDepth > rule.maxDepth;
     const strings = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule) || rule.enabled === false) continue; // 停用的规则不参与匹配
+      if (!isValidRule(rule) || rule.enabled === false || isHiddenByDepth(rule)) continue; // 停用/超深度的规则不参与匹配
       strings.add(rule.from);
       strings.add(rule.to);
     }
@@ -108,7 +138,7 @@
     const matches = [];
     const seen = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule) || rule.enabled === false) continue;
+      if (!isValidRule(rule) || rule.enabled === false || isHiddenByDepth(rule)) continue;
       let forward;
       if (rule.from === current) forward = true;
       else if (rule.to === current) forward = false;
@@ -222,11 +252,17 @@
   const toInput = document.createElement('input');
   toInput.placeholder = 'to';
   toInput.style.cssText = 'flex:1;min-width:0;padding:6px;border:1px solid #ccc;border-radius:4px;';
+  const depthInput = document.createElement('input');
+  depthInput.placeholder = '深度';
+  depthInput.type = 'number';
+  depthInput.min = '0';
+  depthInput.title = '路径段数上限（可选）：超过则视为子网页、不显示按钮。如填 2：/{owner}/{repo} 显示，/blob/... 不显示。留空不限。';
+  depthInput.style.cssText = 'width:52px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.textContent = '添加';
   addBtn.style.cssText = 'padding:6px 12px;color:#fff;background:#1a73e8;border:none;border-radius:4px;cursor:pointer;';
-  formRow.append(fromInput, toInput, addBtn);
+  formRow.append(fromInput, toInput, depthInput, addBtn);
 
   panel.append(panelHeader, listEl, formRow);
 
@@ -261,7 +297,9 @@
         refresh();
       });
       const label = document.createElement('span');
-      label.textContent = rule.from + ' → ' + rule.to;
+      // 深度上限规则在文案后标注，如 github → github1s（≤2级）
+      label.textContent = rule.from + ' → ' + rule.to
+        + (typeof rule.maxDepth === 'number' ? `（≤${rule.maxDepth}级）` : '');
       if (rule.enabled === false) {
         label.style.cssText = 'color:#999;text-decoration:line-through;'; // 停用的规则置灰加删除线
       }
@@ -307,14 +345,25 @@
       alert('该规则已存在。');
       return;
     }
-    rules.push({ from, to });
+    // 深度上限：留空不限；填了则必须是非负整数
+    const depthRaw = depthInput.value.trim();
+    let maxDepth;
+    if (depthRaw !== '') {
+      maxDepth = Number(depthRaw);
+      if (!Number.isInteger(maxDepth) || maxDepth < 0) {
+        alert('深度上限须为非负整数（路径按 / 分段计数）。');
+        return;
+      }
+    }
+    rules.push(maxDepth === undefined ? { from, to } : { from, to, maxDepth });
     saveRules();
     fromInput.value = '';
     toInput.value = '';
+    depthInput.value = '';
     refresh();
   }
   addBtn.addEventListener('click', addRule);
-  [fromInput, toInput].forEach(inp => {
+  [fromInput, toInput, depthInput].forEach(inp => {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') addRule();
     });
@@ -323,7 +372,12 @@
   // 重置为默认规则
   function resetRules() {
     if (!confirm('确定清空所有规则并恢复默认值吗？')) return;
-    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({ from: r.from, to: r.to, enabled: true }));
+    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
+      from: r.from,
+      to: r.to,
+      enabled: true,
+      maxDepth: normalizeMaxDepth(r.maxDepth),
+    }));
     GM_setValue(DELETED_DEFAULTS_KEY, []); // 重置即恢复全部默认规则，清空已删除记录
     saveRules();
     refresh();

@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.17.0] - 2026-10-02
+
+### Added
+
+- 规则新增可选 `maxDepth`（路径段数上限）：`pathname` 按 `/` 分段计数，超过上限视为子网页、按钮不显示。默认 github 规则设为 `2`——`/{owner}/{repo}` 仓库页显示，`/blob/...` 文件页、`/issues` 等更深页面隐藏；目标站的反向按钮同样受限。
+- 规则管理面板添加表单增加可选「深度」输入框；列表中设限规则标注如 `（≤2级）`。
+
+### Changed
+
+- 自动合并升级：旧存储中缺 `maxDepth` 的默认规则会自动补上新默认值（无需重置）；用户自定义过的 `maxDepth` 不会被覆盖。
+
 ## [0.16.2] - 2026-10-01
 
 ### Changed
