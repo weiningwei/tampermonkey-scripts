@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.14.1
+// @version      0.14.2
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -255,14 +255,17 @@
 
   panel.append(panelHeader, listEl, formRow);
 
-  gearBtn.addEventListener('click', () => {
+  // 开关规则管理面板（齿轮点击 / 把手右键共用）
+  function togglePanel() {
     const show = panel.style.display === 'none';
     panel.style.display = show ? 'block' : 'none';
     if (show) {
       renderList();
       positionPanel();
     }
-  });
+  }
+
+  gearBtn.addEventListener('click', togglePanel);
 
   // 渲染规则列表
   function renderList() {
@@ -366,25 +369,26 @@
   bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
   bar.append(switchWrap, gearBtn, toggleBtn);
 
-  // 控制工具栏各按钮的显示：命中规则（showSwitch=true）时切换按钮始终自动展开，
-  // 收起偏好不生效；未命中时按收起偏好决定是否只留把手。
+  // 控制工具栏各按钮的显示：命中规则（showSwitch=true）时只显示切换按钮 + 把手（齿轮隐藏，
+  // 避免自动展开时多一个与当前操作无关的按钮）；未命中时按收起偏好决定显示齿轮还是只留把手。
+  // 齿轮隐藏后，任意页面可右键点把手打开规则管理面板（兜底入口）。
   // display 需显式用 flex/none（cssText 中的 flex 布局依赖它）
   function applyCollapsed(showSwitch) {
     if (showSwitch) {
       switchWrap.style.display = 'flex';
-      gearBtn.style.display = '';
+      gearBtn.style.display = 'none';
       toggleBtn.textContent = '»';
-      toggleBtn.title = '收起';
+      toggleBtn.title = '收起（右键管理规则）';
     } else if (collapsed) {
       switchWrap.style.display = 'none';
       gearBtn.style.display = 'none';
       toggleBtn.textContent = '«';
-      toggleBtn.title = '展开';
+      toggleBtn.title = '展开（右键管理规则）';
     } else {
       switchWrap.style.display = 'none';
       gearBtn.style.display = '';
       toggleBtn.textContent = '»';
-      toggleBtn.title = '收起';
+      toggleBtn.title = '收起（右键管理规则）';
     }
   }
 
@@ -396,6 +400,12 @@
     }
     if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
     refresh();
+  });
+
+  // 右键把手：任意页面打开/关闭规则管理面板（齿轮隐藏时的兜底入口）
+  toggleBtn.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    togglePanel();
   });
 
   // 将工具栏定位到距视口右下角 (right, bottom) 的位置（left/top 置为 auto 以让 right/bottom 生效），并限制在视口内
