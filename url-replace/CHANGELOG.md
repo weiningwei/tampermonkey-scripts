@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.16.1] - 2026-10-01
+
+### Changed
+
+- 多目标按钮纵向堆叠时，齿轮按钮由垂直居中改为与最下方按钮**底端对齐**（`align-items: flex-end`），视觉上更自然。
+
 ## [0.16.0] - 2026-10-01
 
 ### Added

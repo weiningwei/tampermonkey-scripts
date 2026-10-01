@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.16.0
+// @version      0.16.1
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -352,8 +352,9 @@
 
   // 底部工具栏：切换按钮 + 齿轮按钮（可拖动，位置持久化）
   // 初始 display:none，由 refresh() 按命中情况显式设为 flex/none
+  // align-items:flex-end：多按钮纵向堆叠时齿轮与最下方按钮底端对齐，视觉上更自然
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:none;gap:8px;align-items:center;user-select:none;touch-action:none;';
+  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:none;gap:8px;align-items:flex-end;user-select:none;touch-action:none;';
   bar.append(switchWrap, gearBtn);
 
   // 右键工具栏任意位置：打开/关闭规则管理面板（与齿轮等效的快捷入口）
