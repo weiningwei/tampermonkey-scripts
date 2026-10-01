@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.16.1
+// @version      0.16.2
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -28,8 +28,6 @@
       { from: 'github', to: 'github1s' },
       { from: 'github', to: 'gitdiagram' },
     ],
-    // 按钮文案模板：{from}、{to} 为规则原串；{arrow} 为 →（正向）或 ←（反向）
-    BUTTON_TEXT: '{from} {arrow} {to}',
     // 是否在新标签页打开（true）；false 则在当前页跳转
     OPEN_IN_NEW_TAB: true,
   };
@@ -131,7 +129,9 @@
     ));
   }
 
-  // 生成按钮文案：弱化当前串、强调目标串（目标串即切换后网址命中的字符串），箭头体现切换方向
+  // 生成按钮内容：三列网格（当前串右对齐 | 箭头居中 | 目标串左对齐），
+  // 配合按钮等宽堆叠，多个按钮的箭头垂直对齐成一条线，长度不一的文案不漂移。
+  // 弱化当前串、强调目标串（目标串即切换后网址命中的字符串），箭头体现切换方向
   function formatLabel(sw) {
     const arrow = sw.forward === false ? '←' : '→';
     // forward=true 表示 from→to：当前串是 from，目标串是 to；反向则相反
@@ -139,13 +139,10 @@
     const strong = 'color:#fff;font-weight:bold';
     const fromStyle = sw.forward ? dim : strong;
     const toStyle = sw.forward ? strong : dim;
-    const fromHtml = `<span style="${fromStyle}">${escapeHtml(sw.from)}</span>`;
-    const toHtml = `<span style="${toStyle}">${escapeHtml(sw.to)}</span>`;
-    const arrowHtml = `<span style="color:#fff">${arrow}</span>`;
-    return CONFIG.BUTTON_TEXT
-      .replaceAll('{from}', fromHtml)
-      .replaceAll('{to}', toHtml)
-      .replaceAll('{arrow}', arrowHtml);
+    const fromHtml = `<span style="${fromStyle};text-align:right">${escapeHtml(sw.from)}</span>`;
+    const toHtml = `<span style="${toStyle};text-align:left">${escapeHtml(sw.to)}</span>`;
+    const arrowHtml = `<span style="color:#fff;text-align:center">${arrow}</span>`;
+    return fromHtml + arrowHtml + toHtml;
   }
 
   // 打开切换后的网址（url 由各按钮自带；无匹配时提示）
@@ -341,7 +338,9 @@
     for (const m of matches) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.style.cssText = BASE_BUTTON_STYLE;
+      // 三列网格布局：当前串（右对齐）| 箭头（居中）| 目标串（左对齐），多按钮箭头垂直对齐
+      btn.style.cssText = BASE_BUTTON_STYLE
+        + ';display:grid;grid-template-columns:1fr auto 1fr;column-gap:6px;align-items:center;width:100%';
       btn.innerHTML = formatLabel(m);
       btn.title = m.url;
       btn.addEventListener('click', () => openReplaced(m.url));
