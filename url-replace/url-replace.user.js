@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.14.0
+// @version      0.14.1
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -83,6 +83,8 @@
 
   let rules = loadRules();
   mergeNewDefaults();
+  // 收起偏好：仅在未命中任何规则的页面上生效（尽量不挡页面）；
+  // 命中规则的页面切换按钮始终自动展开显示，无需手动点把手。
   let collapsed = GM_getValue(COLLAPSED_KEY, false) === true;
 
   // 检测当前页面可用的切换目标：返回 [{ from, to, forward, url }]，无命中返回 []。
@@ -364,16 +366,22 @@
   bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;user-select:none;touch-action:none;';
   bar.append(switchWrap, gearBtn, toggleBtn);
 
-  // 根据收起状态切换按钮显示：收起时仅保留把手，展开时恢复
-  // showSwitch：是否存在可显示的切换按钮；display 需显式用 flex/none（cssText 中的 flex 布局依赖它）
+  // 控制工具栏各按钮的显示：命中规则（showSwitch=true）时切换按钮始终自动展开，
+  // 收起偏好不生效；未命中时按收起偏好决定是否只留把手。
+  // display 需显式用 flex/none（cssText 中的 flex 布局依赖它）
   function applyCollapsed(showSwitch) {
-    if (collapsed) {
+    if (showSwitch) {
+      switchWrap.style.display = 'flex';
+      gearBtn.style.display = '';
+      toggleBtn.textContent = '»';
+      toggleBtn.title = '收起';
+    } else if (collapsed) {
       switchWrap.style.display = 'none';
       gearBtn.style.display = 'none';
       toggleBtn.textContent = '«';
       toggleBtn.title = '展开';
     } else {
-      switchWrap.style.display = showSwitch ? 'flex' : 'none';
+      switchWrap.style.display = 'none';
       gearBtn.style.display = '';
       toggleBtn.textContent = '»';
       toggleBtn.title = '收起';
@@ -382,7 +390,10 @@
 
   toggleBtn.addEventListener('click', () => {
     collapsed = !collapsed;
-    GM_setValue(COLLAPSED_KEY, collapsed);
+    // 收起偏好仅在未命中的页面上持久化；命中页面上收起只对当前页临时生效（下次导航自动展开）
+    if (detectMatches().length === 0) {
+      GM_setValue(COLLAPSED_KEY, collapsed);
+    }
     if (collapsed) panel.style.display = 'none'; // 收起时顺带关闭面板
     refresh();
   });
