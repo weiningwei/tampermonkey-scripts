@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.18.0
+// @version      0.19.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -23,12 +23,13 @@
     // 会自动合并进存储（你在页面上删过的默认规则不会被复活），其余以页面内增删为准。
     // 同一 from 可对应多个 to（一对多），命中时每个目标各渲染一个按钮。
     // 每条规则支持 enabled 开关（在管理面板勾选/取消），停用的规则不参与匹配。
-    // 可选 maxDepth：路径段数上限（pathname 按 / 分段），超过则视为子网页、不显示按钮。
-    // 例如 github 仓库页 /{owner}/{repo} 为 2 段（显示），/blob/... 文件页为 5 段（不显示）。
+    // 可选 minDepth / maxDepth：路径段数范围（pathname 按 / 分段计数），超出范围则不显示按钮。
+    // 例如 github 仓库页 /{owner}/{repo} 为 2 段：设 2~2 表示仅仓库页级别显示，
+    // /search、/explore 等浅功能页与 /blob/... 等深页面都不显示。
     REPLACEMENTS: [
       { from: 'gitcode', to: 'atomgit' },
-      { from: 'github', to: 'github1s', maxDepth: 2 },
-      { from: 'github', to: 'gitdiagram', maxDepth: 2 },
+      { from: 'github', to: 'github1s', minDepth: 2, maxDepth: 2 },
+      { from: 'github', to: 'gitdiagram', minDepth: 2, maxDepth: 2 },
     ],
     // 是否在新标签页打开（true）；false 则在当前页跳转
     OPEN_IN_NEW_TAB: true,
@@ -46,8 +47,8 @@
   }
 
   // 读取规则：优先取存储值；首次运行用 CONFIG 初始化。
-  // 统一补全字段：enabled 缺失视为启用；maxDepth 仅保留合法的非负整数，其余视为不限
-  function normalizeMaxDepth(v) {
+  // 统一补全字段：enabled 缺失视为启用；minDepth/maxDepth 仅保留合法的非负整数，其余视为不限
+  function normalizeDepth(v) {
     return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined;
   }
   function loadRules() {
@@ -57,14 +58,16 @@
         from: r.from,
         to: r.to,
         enabled: r.enabled !== false,
-        maxDepth: normalizeMaxDepth(r.maxDepth),
+        minDepth: normalizeDepth(r.minDepth),
+        maxDepth: normalizeDepth(r.maxDepth),
       }));
     }
     return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
       from: r.from,
       to: r.to,
       enabled: true,
-      maxDepth: normalizeMaxDepth(r.maxDepth),
+      minDepth: normalizeDepth(r.minDepth),
+      maxDepth: normalizeDepth(r.maxDepth),
     }));
   }
 
@@ -86,15 +89,26 @@
       if (deleted.has(key)) continue;
       const existing = rules.find(x => x.from === r.from && x.to === r.to);
       if (existing) {
-        // 已有规则：仅补缺失的 maxDepth（用户在添加时未填，而新版本默认值带上了）
-        const md = normalizeMaxDepth(r.maxDepth);
-        if (md !== undefined && existing.maxDepth === undefined) {
-          existing.maxDepth = md;
+        // 已有规则：仅补缺失的 minDepth/maxDepth（用户未设置，而新版本默认值带上了）
+        const min = normalizeDepth(r.minDepth);
+        const max = normalizeDepth(r.maxDepth);
+        if (min !== undefined && existing.minDepth === undefined) {
+          existing.minDepth = min;
+          changed = true;
+        }
+        if (max !== undefined && existing.maxDepth === undefined) {
+          existing.maxDepth = max;
           changed = true;
         }
         continue;
       }
-      rules.push({ from: r.from, to: r.to, enabled: true, maxDepth: normalizeMaxDepth(r.maxDepth) });
+      rules.push({
+        from: r.from,
+        to: r.to,
+        enabled: true,
+        minDepth: normalizeDepth(r.minDepth),
+        maxDepth: normalizeDepth(r.maxDepth),
+      });
       changed = true;
     }
     if (changed) saveRules();
@@ -124,11 +138,12 @@
     // 当前路径段数：pathname 按 / 分段去空（/{owner}/{repo} → 2，/{owner}/{repo}/blob/main/x.md → 5），
     // 用于规则的可选 maxDepth 限制：超过上限视为子网页，规则不参与匹配（按钮不显示）
     const pathDepth = u.pathname.split('/').filter(Boolean).length;
-    const isHiddenByDepth = (rule) =>
-      typeof rule.maxDepth === 'number' && pathDepth > rule.maxDepth;
+    const outsideDepth = (rule) =>
+      (typeof rule.minDepth === 'number' && pathDepth < rule.minDepth)
+      || (typeof rule.maxDepth === 'number' && pathDepth > rule.maxDepth);
     const strings = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule) || rule.enabled === false || isHiddenByDepth(rule)) continue; // 停用/超深度的规则不参与匹配
+      if (!isValidRule(rule) || rule.enabled === false || outsideDepth(rule)) continue; // 停用/超出深度范围的规则不参与匹配
       strings.add(rule.from);
       strings.add(rule.to);
     }
@@ -138,7 +153,7 @@
     const matches = [];
     const seen = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule) || rule.enabled === false || isHiddenByDepth(rule)) continue;
+      if (!isValidRule(rule) || rule.enabled === false || outsideDepth(rule)) continue;
       let forward;
       if (rule.from === current) forward = true;
       else if (rule.to === current) forward = false;
@@ -254,10 +269,9 @@
   toInput.style.cssText = 'flex:1;min-width:0;padding:6px;border:1px solid #ccc;border-radius:4px;';
   const depthInput = document.createElement('input');
   depthInput.placeholder = '深度';
-  depthInput.type = 'number';
-  depthInput.min = '0';
-  depthInput.title = '路径段数上限（可选）：超过则视为子网页、不显示按钮。如填 2：/{owner}/{repo} 显示，/blob/... 不显示。留空不限。';
-  depthInput.style.cssText = 'width:52px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
+  depthInput.title = '路径段数范围（可选）：填 2 表示 ≤2；填 2-3 表示 2~3 段；留空不限。'
+    + '路径按 / 分段计数，超出范围不显示按钮。';
+  depthInput.style.cssText = 'width:56px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.textContent = '添加';
@@ -301,48 +315,71 @@
       if (rule.enabled === false) {
         label.style.cssText = 'color:#999;text-decoration:line-through;'; // 停用的规则置灰加删除线
       }
-      // 深度上限徽标：显示当前限制（≤N级 / 不限），点击可原地编辑，悬停显示含义说明
-      const depthTip = '深度上限：网址路径按 / 分段计数，超过该段数则视为子网页、不显示按钮。'
-        + '例如填 2：/{owner}/{repo} 显示，/blob/... 等更深页面不显示。点击可修改，清空保存为不限。';
+      // 深度范围徽标：显示当前限制（=2级 / 2~3级 / ≥N级 / ≤N级 / 不限），点击可原地编辑，悬停显示含义说明
+      const depthTip = '深度范围：网址路径按 / 分段计数，超出范围则不显示按钮。'
+        + '例如 2~2：/{owner}/{repo} 仓库页显示，/search、/blob/... 等其他页面不显示。点击可修改，两端都清空保存为不限。';
       const depthBadge = document.createElement('span');
       depthBadge.title = depthTip;
       depthBadge.style.cssText = 'color:#1a73e8;cursor:pointer;border-bottom:1px dashed #1a73e8;flex-shrink:0;white-space:nowrap;';
-      const badgeText = () =>
-        typeof rule.maxDepth === 'number' ? `≤${rule.maxDepth}级` : '不限';
+      const badgeText = () => {
+        const min = typeof rule.minDepth === 'number' ? rule.minDepth : undefined;
+        const max = typeof rule.maxDepth === 'number' ? rule.maxDepth : undefined;
+        if (min === undefined && max === undefined) return '不限';
+        if (min !== undefined && max !== undefined) return min === max ? `=${min}级` : `${min}~${max}级`;
+        if (min !== undefined) return `≥${min}级`;
+        return `≤${max}级`;
+      };
       depthBadge.textContent = badgeText();
 
-      // 点击徽标 → 原地换成数字输入框；Enter 或失焦保存，Esc 取消
+      // 点击徽标 → 原地换成两个数字输入框（下限 ~ 上限）；Enter 或失焦保存，Esc 取消
       depthBadge.addEventListener('click', () => {
         if (depthBadge.querySelector('input')) return; // 已在编辑中
         depthBadge.title = '';
         depthBadge.style.borderBottom = 'none';
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.min = '0';
-        input.value = typeof rule.maxDepth === 'number' ? rule.maxDepth : '';
-        input.placeholder = '不限';
-        input.style.cssText = 'width:48px;padding:1px 4px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;box-sizing:border-box;';
+        const mkInput = (val) => {
+          const input = document.createElement('input');
+          input.type = 'number';
+          input.min = '0';
+          input.value = typeof val === 'number' ? val : '';
+          input.placeholder = '不限';
+          input.style.cssText = 'width:42px;padding:1px 3px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;box-sizing:border-box;';
+          return input;
+        };
+        const minInput = mkInput(rule.minDepth);
+        const maxInput = mkInput(rule.maxDepth);
+        const tilde = document.createElement('span');
+        tilde.textContent = '~';
         depthBadge.textContent = '';
-        depthBadge.appendChild(input);
-        input.focus();
+        depthBadge.append(minInput, tilde, maxInput);
+        minInput.focus();
 
+        const readBound = (input) => {
+          const raw = input.value.trim();
+          if (raw === '') return { ok: true, val: undefined };
+          const v = Number(raw);
+          if (!Number.isInteger(v) || v < 0) return { ok: false };
+          return { ok: true, val: v };
+        };
         let finished = false; // 防止 Esc 取消后移除输入框又触发 blur 导致误提交
         function commit() {
           if (finished) return;
-          finished = true;
-          const raw = input.value.trim();
-          if (raw === '') {
-            delete rule.maxDepth; // 清空 = 不限
-          } else {
-            const v = Number(raw);
-            if (!Number.isInteger(v) || v < 0) {
-              alert('深度上限须为非负整数（路径按 / 分段计数）。');
-              finished = false;
-              input.focus();
-              return;
-            }
-            rule.maxDepth = v;
+          const lo = readBound(minInput);
+          const hi = readBound(maxInput);
+          if (!lo.ok || !hi.ok) {
+            alert('深度范围须为非负整数（路径按 / 分段计数），留空表示不限。');
+            finished = false;
+            (lo.ok ? maxInput : minInput).focus();
+            return;
           }
+          if (lo.val !== undefined && hi.val !== undefined && lo.val > hi.val) {
+            alert('深度下限不能大于上限。');
+            finished = false;
+            minInput.focus();
+            return;
+          }
+          finished = true;
+          if (lo.val === undefined) delete rule.minDepth; else rule.minDepth = lo.val;
+          if (hi.val === undefined) delete rule.maxDepth; else rule.maxDepth = hi.val;
           saveRules();
           refresh();
         }
@@ -353,12 +390,14 @@
           depthBadge.title = depthTip;
           depthBadge.style.borderBottom = '1px dashed #1a73e8';
         }
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') commit();
-          else if (e.key === 'Escape') cancel();
+        [minInput, maxInput].forEach((input) => {
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') commit();
+            else if (e.key === 'Escape') cancel();
+          });
+          input.addEventListener('blur', commit);
+          input.addEventListener('click', (e) => e.stopPropagation()); // 避免再次触发徽标 click
         });
-        input.addEventListener('blur', commit);
-        input.addEventListener('click', (e) => e.stopPropagation()); // 避免再次触发徽标 click
       });
 
       left.append(enabledBox, label, depthBadge);
@@ -403,17 +442,29 @@
       alert('该规则已存在。');
       return;
     }
-    // 深度上限：留空不限；填了则必须是非负整数
+    // 深度范围：留空不限；格式为「2」（≤2）或「2-3」（2~3 段）
     const depthRaw = depthInput.value.trim();
-    let maxDepth;
+    let minDepth, maxDepth;
     if (depthRaw !== '') {
-      maxDepth = Number(depthRaw);
-      if (!Number.isInteger(maxDepth) || maxDepth < 0) {
-        alert('深度上限须为非负整数（路径按 / 分段计数）。');
+      const m = depthRaw.match(/^(\d+)(?:-(\d+))?$/);
+      if (!m) {
+        alert('深度格式：填 2 表示 ≤2，填 2-3 表示 2~3 段，留空不限。');
         return;
       }
+      maxDepth = Number(m[1]);
+      if (m[2] !== undefined) {
+        minDepth = Number(m[1]);
+        maxDepth = Number(m[2]);
+        if (minDepth > maxDepth) {
+          alert('深度下限不能大于上限。');
+          return;
+        }
+      }
     }
-    rules.push(maxDepth === undefined ? { from, to } : { from, to, maxDepth });
+    const depthFields = {};
+    if (minDepth !== undefined) depthFields.minDepth = minDepth;
+    if (maxDepth !== undefined) depthFields.maxDepth = maxDepth;
+    rules.push({ from, to, ...depthFields });
     saveRules();
     fromInput.value = '';
     toInput.value = '';
@@ -434,7 +485,8 @@
       from: r.from,
       to: r.to,
       enabled: true,
-      maxDepth: normalizeMaxDepth(r.maxDepth),
+      minDepth: normalizeDepth(r.minDepth),
+      maxDepth: normalizeDepth(r.maxDepth),
     }));
     GM_setValue(DELETED_DEFAULTS_KEY, []); // 重置即恢复全部默认规则，清空已删除记录
     saveRules();
