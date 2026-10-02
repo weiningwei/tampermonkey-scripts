@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.17.0
+// @version      0.18.0
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -297,13 +297,71 @@
         refresh();
       });
       const label = document.createElement('span');
-      // 深度上限规则在文案后标注，如 github → github1s（≤2级）
-      label.textContent = rule.from + ' → ' + rule.to
-        + (typeof rule.maxDepth === 'number' ? `（≤${rule.maxDepth}级）` : '');
+      label.textContent = rule.from + ' → ' + rule.to;
       if (rule.enabled === false) {
         label.style.cssText = 'color:#999;text-decoration:line-through;'; // 停用的规则置灰加删除线
       }
-      left.append(enabledBox, label);
+      // 深度上限徽标：显示当前限制（≤N级 / 不限），点击可原地编辑，悬停显示含义说明
+      const depthTip = '深度上限：网址路径按 / 分段计数，超过该段数则视为子网页、不显示按钮。'
+        + '例如填 2：/{owner}/{repo} 显示，/blob/... 等更深页面不显示。点击可修改，清空保存为不限。';
+      const depthBadge = document.createElement('span');
+      depthBadge.title = depthTip;
+      depthBadge.style.cssText = 'color:#1a73e8;cursor:pointer;border-bottom:1px dashed #1a73e8;flex-shrink:0;white-space:nowrap;';
+      const badgeText = () =>
+        typeof rule.maxDepth === 'number' ? `≤${rule.maxDepth}级` : '不限';
+      depthBadge.textContent = badgeText();
+
+      // 点击徽标 → 原地换成数字输入框；Enter 或失焦保存，Esc 取消
+      depthBadge.addEventListener('click', () => {
+        if (depthBadge.querySelector('input')) return; // 已在编辑中
+        depthBadge.title = '';
+        depthBadge.style.borderBottom = 'none';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.value = typeof rule.maxDepth === 'number' ? rule.maxDepth : '';
+        input.placeholder = '不限';
+        input.style.cssText = 'width:48px;padding:1px 4px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;box-sizing:border-box;';
+        depthBadge.textContent = '';
+        depthBadge.appendChild(input);
+        input.focus();
+
+        let finished = false; // 防止 Esc 取消后移除输入框又触发 blur 导致误提交
+        function commit() {
+          if (finished) return;
+          finished = true;
+          const raw = input.value.trim();
+          if (raw === '') {
+            delete rule.maxDepth; // 清空 = 不限
+          } else {
+            const v = Number(raw);
+            if (!Number.isInteger(v) || v < 0) {
+              alert('深度上限须为非负整数（路径按 / 分段计数）。');
+              finished = false;
+              input.focus();
+              return;
+            }
+            rule.maxDepth = v;
+          }
+          saveRules();
+          refresh();
+        }
+        function cancel() {
+          if (finished) return;
+          finished = true;
+          depthBadge.textContent = badgeText();
+          depthBadge.title = depthTip;
+          depthBadge.style.borderBottom = '1px dashed #1a73e8';
+        }
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') commit();
+          else if (e.key === 'Escape') cancel();
+        });
+        input.addEventListener('blur', commit);
+        input.addEventListener('click', (e) => e.stopPropagation()); // 避免再次触发徽标 click
+      });
+
+      left.append(enabledBox, label, depthBadge);
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.textContent = '删除';
