@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.19.0
+// @version      0.19.1
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -267,18 +267,37 @@
   const toInput = document.createElement('input');
   toInput.placeholder = 'to';
   toInput.style.cssText = 'flex:1;min-width:0;padding:6px;border:1px solid #ccc;border-radius:4px;';
-  const depthInput = document.createElement('input');
-  depthInput.placeholder = '深度';
-  depthInput.title = '路径段数范围（可选）：填 2 表示 ≤2；填 2-3 表示 2~3 段；留空不限。'
-    + '路径按 / 分段计数，超出范围不显示按钮。';
-  depthInput.style.cssText = 'width:56px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.textContent = '添加';
   addBtn.style.cssText = 'padding:6px 12px;color:#fff;background:#1a73e8;border:none;border-radius:4px;cursor:pointer;';
-  formRow.append(fromInput, toInput, depthInput, addBtn);
+  formRow.append(fromInput, toInput, addBtn);
 
-  panel.append(panelHeader, listEl, formRow);
+  // 深度范围行：与列表徽标编辑一致的两个输入框（下限 ~ 上限），留空不限
+  const depthRow = document.createElement('div');
+  depthRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;';
+  const depthLabel = document.createElement('span');
+  depthLabel.textContent = '深度';
+  depthLabel.style.cssText = 'color:#666;flex-shrink:0;';
+  const depthTip = '路径段数范围（可选）：路径按 / 分段计数，超出范围不显示按钮。'
+    + '例如都填 2：/{owner}/{repo} 显示，/search、/blob/... 等其他页面不显示。留空不限。';
+  const mkDepthInput = () => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.placeholder = '不限';
+    input.title = depthTip;
+    input.style.cssText = 'width:64px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
+    return input;
+  };
+  const minDepthInput = mkDepthInput();
+  const maxDepthInput = mkDepthInput();
+  const depthTilde = document.createElement('span');
+  depthTilde.textContent = '~';
+  depthTilde.style.cssText = 'color:#666;flex-shrink:0;';
+  depthRow.append(depthLabel, minDepthInput, depthTilde, maxDepthInput);
+
+  panel.append(panelHeader, listEl, formRow, depthRow);
 
   // 开关规则管理面板（齿轮点击 / 工具栏右键 / 油猴菜单共用）
   function togglePanel() {
@@ -442,37 +461,37 @@
       alert('该规则已存在。');
       return;
     }
-    // 深度范围：留空不限；格式为「2」（≤2）或「2-3」（2~3 段）
-    const depthRaw = depthInput.value.trim();
-    let minDepth, maxDepth;
-    if (depthRaw !== '') {
-      const m = depthRaw.match(/^(\d+)(?:-(\d+))?$/);
-      if (!m) {
-        alert('深度格式：填 2 表示 ≤2，填 2-3 表示 2~3 段，留空不限。');
-        return;
-      }
-      maxDepth = Number(m[1]);
-      if (m[2] !== undefined) {
-        minDepth = Number(m[1]);
-        maxDepth = Number(m[2]);
-        if (minDepth > maxDepth) {
-          alert('深度下限不能大于上限。');
-          return;
-        }
-      }
+    // 深度范围：与列表徽标编辑一致，两个输入框分别为下限/上限，留空不限
+    const readBound = (input) => {
+      const raw = input.value.trim();
+      if (raw === '') return { ok: true, val: undefined };
+      const v = Number(raw);
+      if (!Number.isInteger(v) || v < 0) return { ok: false };
+      return { ok: true, val: v };
+    };
+    const lo = readBound(minDepthInput);
+    const hi = readBound(maxDepthInput);
+    if (!lo.ok || !hi.ok) {
+      alert('深度范围须为非负整数（路径按 / 分段计数），留空表示不限。');
+      return;
+    }
+    if (lo.val !== undefined && hi.val !== undefined && lo.val > hi.val) {
+      alert('深度下限不能大于上限。');
+      return;
     }
     const depthFields = {};
-    if (minDepth !== undefined) depthFields.minDepth = minDepth;
-    if (maxDepth !== undefined) depthFields.maxDepth = maxDepth;
+    if (lo.val !== undefined) depthFields.minDepth = lo.val;
+    if (hi.val !== undefined) depthFields.maxDepth = hi.val;
     rules.push({ from, to, ...depthFields });
     saveRules();
     fromInput.value = '';
     toInput.value = '';
-    depthInput.value = '';
+    minDepthInput.value = '';
+    maxDepthInput.value = '';
     refresh();
   }
   addBtn.addEventListener('click', addRule);
-  [fromInput, toInput, depthInput].forEach(inp => {
+  [fromInput, toInput, minDepthInput, maxDepthInput].forEach(inp => {
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') addRule();
     });
