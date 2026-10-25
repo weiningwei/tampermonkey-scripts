@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.3.2
+// @version      0.3.3
 // @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
 // @author       weiningwei
 // @match        *://gitcode.com/*
@@ -65,6 +65,8 @@
   let panel = null;
   let statusEl = null;
   let debounceTimer = null;
+  let runGeneration = 0;
+  let rerunRequested = false;
 
   /* ------------------------------ 目标查找 ------------------------------ */
 
@@ -157,8 +159,13 @@
   /* ------------------------------ 展开流程 ------------------------------ */
 
   async function run() {
-    if (running) return;
+    if (!isActive()) return;
+    if (running) {
+      rerunRequested = true;
+      return;
+    }
     running = true;
+    const generation = runGeneration;
     setStatus('展开中', 'busy');
     suppressScroll();
 
@@ -166,12 +173,14 @@
 
     try {
       for (let round = 0; round < CONFIG.MAX_ROUNDS; round++) {
+        if (generation !== runGeneration || !isActive()) break;
         if (Date.now() - startedAt > CONFIG.MAX_RUN_MS) break;
 
         const targets = findTargets();
         let clickedInRound = 0;
 
         for (const target of targets) {
+          if (generation !== runGeneration || !isActive()) break;
           if (Date.now() - startedAt > CONFIG.MAX_RUN_MS) break;
           if (!isVisible(target) || isDone(target)) continue;
           target.setAttribute(DONE_ATTR, '1');
@@ -190,13 +199,24 @@
       running = false;
     }
 
-    setStatus(expandedCount ? '已展开 ' + expandedCount : '无折叠', expandedCount ? 'ok' : 'idle');
+    // 仅由当前页面的任务更新状态；切页后的新任务负责新页面的状态。
+    if (generation === runGeneration && isActive()) {
+      setStatus(expandedCount ? '已展开 ' + expandedCount : '无折叠', expandedCount ? 'ok' : 'idle');
+    }
+    if (rerunRequested) {
+      rerunRequested = false;
+      schedule();
+    }
   }
 
   function schedule() {
-    if (!autoExpand || !isActive()) return;
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(run, CONFIG.DEBOUNCE_MS);
+    debounceTimer = null;
+    if (!autoExpand || !isActive()) return;
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      run();
+    }, CONFIG.DEBOUNCE_MS);
   }
 
   /* -------------------------------- 界面 -------------------------------- */
@@ -375,8 +395,12 @@
     menuId = GM_registerMenuCommand('自动展开评论：' + (autoExpand ? '开' : '关'), () => {
       autoExpand = !autoExpand;
       GM_setValue(AUTO_KEY, autoExpand);
+      if (!autoExpand) {
+        runGeneration++;
+        rerunRequested = false;
+      }
       refreshMenu();
-      if (autoExpand) schedule();
+      schedule();
     });
   }
 
@@ -404,6 +428,8 @@
     lastHref = location.href;
     if (location.pathname !== lastPath) {
       lastPath = location.pathname;
+      runGeneration++;
+      rerunRequested = false;
       expandedCount = 0;
       const marked = document.querySelectorAll('[' + DONE_ATTR + ']');
       for (const el of marked) el.removeAttribute(DONE_ATTR);
