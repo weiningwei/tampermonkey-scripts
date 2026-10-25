@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.19.2] - 2026-10-25
+
+### Fixed
+
+- 修复深度范围徽标的双输入框无法顺畅切换焦点：现在从下限切到上限（或反向）不会提前提交，只有离开整个编辑区、按 Enter 时才保存。
+- 默认规则的新字段补全改为一次性迁移，用户随后清空 `minDepth` / `maxDepth` 后，刷新页面不再自动恢复默认限制。
+
 ## [0.19.1] - 2026-10-02
 
 ### Changed

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         URL Replace（网址替换新标签打开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.19.1
+// @version      0.19.2
 // @description  网址命中替换规则时一键在新标签页打开对应站点；同一来源可配多个目标（如 github → github1s / gitdiagram），支持动态增删规则。
 // @author       weiningwei
 // @match        *://*/*
@@ -40,6 +40,9 @@
   const POS_KEY = 'url-replace.buttonPos';
   // 记录用户在页面上删除过的默认规则（from>to），自动合并时不再复活它们
   const DELETED_DEFAULTS_KEY = 'url-replace.deletedDefaults';
+  // 默认规则字段迁移版本：旧存储只补一次，避免用户随后清空深度限制又被反复恢复
+  const DEFAULT_FIELDS_MIGRATION_KEY = 'url-replace.defaultFieldsMigration';
+  const DEFAULT_FIELDS_MIGRATION_VERSION = 1;
 
   function isValidRule(r) {
     return r && typeof r.from === 'string' && typeof r.to === 'string'
@@ -79,9 +82,11 @@
 
   // 把 CONFIG 中存储里还没有的默认规则自动补进去（脚本更新后新增默认规则即可生效），
   // 用户删过的默认规则（在 DELETED_DEFAULTS_KEY 中）不会被重新加回。
-  // 另外若存储里的默认规则缺 maxDepth 而 CONFIG 里有（脚本更新新增的限制），自动补上。
+  // 旧存储里的默认规则缺少新字段时只做一次迁移；迁移后以用户编辑结果为准。
   function mergeNewDefaults() {
     const deleted = new Set(loadDeletedDefaults());
+    const shouldMigrateFields = GM_getValue(DEFAULT_FIELDS_MIGRATION_KEY, 0)
+      < DEFAULT_FIELDS_MIGRATION_VERSION;
     let changed = false;
     for (const r of CONFIG.REPLACEMENTS) {
       if (!isValidRule(r)) continue;
@@ -89,16 +94,17 @@
       if (deleted.has(key)) continue;
       const existing = rules.find(x => x.from === r.from && x.to === r.to);
       if (existing) {
-        // 已有规则：仅补缺失的 minDepth/maxDepth（用户未设置，而新版本默认值带上了）
-        const min = normalizeDepth(r.minDepth);
-        const max = normalizeDepth(r.maxDepth);
-        if (min !== undefined && existing.minDepth === undefined) {
-          existing.minDepth = min;
-          changed = true;
-        }
-        if (max !== undefined && existing.maxDepth === undefined) {
-          existing.maxDepth = max;
-          changed = true;
+        if (shouldMigrateFields) {
+          const min = normalizeDepth(r.minDepth);
+          const max = normalizeDepth(r.maxDepth);
+          if (min !== undefined && existing.minDepth === undefined) {
+            existing.minDepth = min;
+            changed = true;
+          }
+          if (max !== undefined && existing.maxDepth === undefined) {
+            existing.maxDepth = max;
+            changed = true;
+          }
         }
         continue;
       }
@@ -110,6 +116,9 @@
         maxDepth: normalizeDepth(r.maxDepth),
       });
       changed = true;
+    }
+    if (shouldMigrateFields) {
+      GM_setValue(DEFAULT_FIELDS_MIGRATION_KEY, DEFAULT_FIELDS_MIGRATION_VERSION);
     }
     if (changed) saveRules();
   }
@@ -414,7 +423,11 @@
             if (e.key === 'Enter') commit();
             else if (e.key === 'Escape') cancel();
           });
-          input.addEventListener('blur', commit);
+          input.addEventListener('blur', (e) => {
+            // 在下限、上限之间切换焦点时继续编辑；仅离开整个双框编辑区后提交。
+            if (e.relatedTarget === minInput || e.relatedTarget === maxInput) return;
+            commit();
+          });
           input.addEventListener('click', (e) => e.stopPropagation()); // 避免再次触发徽标 click
         });
       });
