@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Linkify（网页文本转链接）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      1.5.0
+// @version      1.5.1
 // @description  自动将网页中的 URL 等纯文本转换为可点击链接，支持动态加载内容。
 // @author       weiningwei
 // @match        *://*/*
@@ -91,7 +91,7 @@
 
     const frag = document.createDocumentFragment();
     let lastIndex = 0;
-    let matched = false;
+    let linksCreated = 0;
 
     // 用第一个能匹配的正则进行分段（多模式时取最先匹配者）
     for (const re of CONFIG.PATTERNS) {
@@ -134,7 +134,7 @@
       const link = makeLink(snippet);
       if (link) {
         frag.appendChild(link);
-        matched = true;
+        linksCreated++;
       } else {
         frag.appendChild(document.createTextNode(snippet));
       }
@@ -144,9 +144,9 @@
       frag.appendChild(document.createTextNode(value.slice(lastIndex)));
     }
 
-    if (matched) {
+    if (linksCreated) {
       textNode.parentNode.replaceChild(frag, textNode);
-      STATS.count++;
+      STATS.count += linksCreated;
     }
     // 原文本节点已被替换/保留，标记避免重复处理
     processed.add(textNode);
@@ -226,6 +226,8 @@
           if (node.nodeType === Node.ELEMENT_NODE) observeShadowsOf(node);
         }
       } else if (mu.type === 'characterData') {
+        // 文本节点可能先以普通文本被标记，之后再原地改成 URL；允许重新检查。
+        processed.delete(mu.target);
         pendingRoots.add(mu.target);
       }
     }

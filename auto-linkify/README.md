@@ -6,7 +6,7 @@
 
 - 自动识别网页正文中的 `http/https` 链接并转为可点击的 `<a>` 标签。
 - 可选在新标签页打开（`target="_blank"`，并附带 `rel="noopener noreferrer"`）。
-- 通过 `MutationObserver` 监听 DOM 变化，自动适配动态加载 / 无限滚动 / 单页应用。
+- 通过 `MutationObserver` 监听 DOM 变化，自动适配动态加载 / 无限滚动 / 单页应用，也能处理既有文本节点的原地更新。
 - 安全：仅使用 DOM API 创建节点，不使用 `innerHTML` 拼接；仅允许 `http/https` 协议，防止伪协议 XSS。
 - 智能跳过：不会处理 `<script>`、`<style>`、`<textarea>`、`<input>`、`<a>`、`<code>`、`<pre>` 等元素内的文本，避免破坏代码、表单与已有链接。
 
@@ -51,11 +51,10 @@ PATTERNS: [
 
 ## 测试
 
-项目提供两套测试方案，共 28 个用例覆盖 7 大类：
+项目提供 Node.js 命令行测试，共 29 个用例覆盖 7 大类：
 
 | 方式 | 文件 | 说明 |
 |------|------|------|
-| 浏览器 | `test.html` | 直接打开，点击按钮检查结果 |
 | 命令行 | `test.js` | `npm install && npm test`，支持 `--verbose` / `--bail` |
 
 ### 测试覆盖
@@ -67,7 +66,7 @@ PATTERNS: [
 | Skip Zone | 7 | `<a>`, `<code>`, `<pre>`, `<textarea>`, `<button>`, `<pre><code>`, `<input>` |
 | Shadow DOM | 3 | 单层、嵌套、三层嵌套 |
 | 边界情况 | 5 | 无 URL、email/ftp、javascript:、锚点、端口号 |
-| 动态内容 | 2 | 增量 linkify、characterData 变动 |
+| 动态内容 | 3 | 增量 linkify、characterData 原地变动、链接统计 |
 | 内部工具函数 | 4 | pruneRoots 去重/断开/空集/兄弟节点 |
 
 ## 变更记录

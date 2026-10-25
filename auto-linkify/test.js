@@ -51,6 +51,7 @@ function makeLink(ownerDoc, text) {
 }
 
 const processed = new WeakSet();
+const STATS = { count: 0 };
 
 function linkifyTextNode(textNode, skipCheck) {
   if (skipCheck === void 0) skipCheck = false;
@@ -72,7 +73,7 @@ function linkifyTextNode(textNode, skipCheck) {
 
   const frag = textNode.ownerDocument.createDocumentFragment();
   let lastIndex = 0;
-  let matched = false;
+  let linksCreated = 0;
 
   for (const re of CONFIG.PATTERNS) re.lastIndex = 0;
 
@@ -110,7 +111,7 @@ function linkifyTextNode(textNode, skipCheck) {
     const link = makeLink(textNode.ownerDocument, snippet);
     if (link) {
       frag.appendChild(link);
-      matched = true;
+      linksCreated++;
     } else {
       frag.appendChild(textNode.ownerDocument.createTextNode(snippet));
     }
@@ -120,8 +121,9 @@ function linkifyTextNode(textNode, skipCheck) {
     frag.appendChild(textNode.ownerDocument.createTextNode(value.slice(lastIndex)));
   }
 
-  if (matched) {
+  if (linksCreated) {
     textNode.parentNode.replaceChild(frag, textNode);
+    STATS.count += linksCreated;
   }
   processed.add(textNode);
 }
@@ -445,19 +447,27 @@ function runTests() {
     assertEqual(countLinksIn(container), 1);
   });
 
-  test('6.2 characterData 变动 — 新文本节点触发处理', () => {
+  test('6.2 characterData 原地变动 — 已处理文本节点可重新检查', () => {
     const dom = createDOM('<p id="target">普通文本</p>');
     linkify(dom.window.document.body);
-    // 模拟 characterData 的实际行为：旧文本节点被替换为新节点
     const target = dom.window.document.getElementById('target');
-    const newText = dom.window.document.createTextNode('请访问 https://changed.test.com/page');
-    target.replaceChild(newText, target.firstChild);
-    linkifyTextNode(newText);
+    const textNode = target.firstChild;
+    textNode.nodeValue = '请访问 https://changed.test.com/page';
+    // MutationObserver 收到 characterData 记录时会清除旧的处理标记。
+    processed.delete(textNode);
+    linkifyTextNode(textNode);
     assertEqual(countLinksIn(target), 1, '新文本中的链接应被处理');
     assertEqual(
       target.querySelector('a').href,
       'https://changed.test.com/page'
     );
+  });
+
+  test('6.3 统计按实际生成的链接数累加', () => {
+    const before = STATS.count;
+    const dom = createDOM('<p>https://one.test 和 https://two.test</p>');
+    linkify(dom.window.document.body);
+    assertEqual(STATS.count - before, 2, '同一文本节点中的两个链接都应计数');
   });
 
   // ══════════════════════════════════════════════════════════════════════
