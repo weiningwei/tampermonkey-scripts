@@ -1,0 +1,21 @@
+url-replace/url-replace.user.js
+  s_14219712d0d769::t_8fe1654abb46f4 4
+url-replace/CHANGELOG.md
+  s_14219712d0d769::t_8fe1654abb46f4 7-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cc55248de614adfdbb1d17454e75ee8f1f81f471",
+  "prompts": {},
+  "sessions": {
+    "s_14219712d0d769": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d015-1cb0-7933-aabf-db144d83d72a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
