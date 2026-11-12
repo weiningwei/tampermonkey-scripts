@@ -2,7 +2,7 @@
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
 // @version      0.3.3
-// @description  GitCode / AtomGit 的 PR 页面自动展开被折叠的评论：连续点击「此处折叠了 N 条消息 … 查看更多」，直到没有折叠块为止。
+// @description  GitCode / AtomGit 的 PR 页面按轮次点击评论折叠块，尝试展开被折叠的评论，并显示已点击次数。
 // @author       weiningwei
 // @match        *://gitcode.com/*
 // @match        *://atomgit.com/*
@@ -59,8 +59,8 @@
 
   let autoExpand = CONFIG.AUTO_EXPAND;
   let running = false;
-  // 当前页面累计已展开的折叠块数（跨多次扫描任务累加，跳转到其他页面时清零）
-  let expandedCount = 0;
+  // 当前页面累计已点击的折叠块数；不代表接口成功或实际展开的评论数。
+  let clickedCount = 0;
   let menuId = null;
   let panel = null;
   let statusEl = null;
@@ -185,9 +185,9 @@
           if (!isVisible(target) || isDone(target)) continue;
           target.setAttribute(DONE_ATTR, '1');
           target.click();
-          expandedCount++;
+          clickedCount++;
           clickedInRound++;
-          setStatus('展开中 ' + expandedCount, 'busy');
+          setStatus('展开中 ' + clickedCount, 'busy');
           await sleep(CONFIG.CLICK_INTERVAL_MS);
         }
 
@@ -201,7 +201,7 @@
 
     // 仅由当前页面的任务更新状态；切页后的新任务负责新页面的状态。
     if (generation === runGeneration && isActive()) {
-      setStatus(expandedCount ? '已展开 ' + expandedCount : '无折叠', expandedCount ? 'ok' : 'idle');
+      setStatus(clickedCount ? '已点击 ' + clickedCount : '无折叠', clickedCount ? 'ok' : 'idle');
     }
     if (rerunRequested) {
       rerunRequested = false;
@@ -226,6 +226,7 @@
     statusEl.textContent = text;
     statusEl.style.color =
       kind === 'busy' ? '#ffd54f' : kind === 'ok' ? '#8bc34a' : 'rgba(255,255,255,.6)';
+    keepPanelInView();
   }
 
   function buildPanel() {
@@ -284,6 +285,7 @@
       panel.style.bottom = 'auto';
       panel.style.left = saved.left;
       panel.style.top = saved.top;
+      keepPanelInView();
       return;
     }
     const rect = panel.getBoundingClientRect();
@@ -367,22 +369,28 @@
     el.addEventListener('touchstart', onDown, { passive: false });
   }
 
-  // 视口尺寸变化时把面板重新夹回视口内，避免跑到屏幕外
-  window.addEventListener('resize', () => {
+  // 恢复位置、状态文字变宽或视口变化时都重新限制位置。
+  function keepPanelInView() {
     if (!panel || panel.style.display === 'none') return;
     const w = panel.offsetWidth, h = panel.offsetHeight;
-    const left = parseFloat(panel.style.left) || 0;
-    const top = parseFloat(panel.style.top) || 0;
+    const savedLeft = parseFloat(panel.style.left);
+    const savedTop = parseFloat(panel.style.top);
+    const left = Number.isFinite(savedLeft) ? savedLeft : 4;
+    const top = Number.isFinite(savedTop) ? savedTop : 4;
     panel.style.left = clamp(left, 4, window.innerWidth - w - 4) + 'px';
     panel.style.top = clamp(top, 4, window.innerHeight - h - 4) + 'px';
-  });
+  }
+  window.addEventListener('resize', keepPanelInView);
 
   // 面板只在 PR 详情页显示；站内跳转进出 PR 页时随之创建 / 隐藏
   function syncPanel() {
     if (!CONFIG.SHOW_PANEL) return;
     if (isActive()) {
       if (!panel && document.body) buildPanel();
-      if (panel) panel.style.display = 'flex';
+      if (panel) {
+        panel.style.display = 'flex';
+        keepPanelInView();
+      }
     } else if (panel) {
       panel.style.display = 'none';
     }
@@ -430,7 +438,7 @@
       lastPath = location.pathname;
       runGeneration++;
       rerunRequested = false;
-      expandedCount = 0;
+      clickedCount = 0;
       const marked = document.querySelectorAll('[' + DONE_ATTR + ']');
       for (const el of marked) el.removeAttribute(DONE_ATTR);
       setStatus('', 'idle');
