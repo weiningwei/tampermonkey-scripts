@@ -248,7 +248,7 @@ function linksInText(root) {
 
 // ─── 用例 ─────────────────────────────────────────────────────────────────
 
-function runTests() {
+async function runTests() {
   console.log(`\n${colors.bold}Auto Linkify — Node.js 测试${colors.reset}\n`);
 
   // ══════════════════════════════════════════════════════════════════════
@@ -504,8 +504,62 @@ function runTests() {
     assertEqual(pruned.length, 2, '兄弟节点应全部保留');
   });
 
-  // ══════════════════════════════════════════════════════════════════════
+  // 加载实际分发脚本，验证观察器与防抖流程，而非手动调用复制的核心函数。
+  async function testUserscript(name, check) {
+    tests++;
+    const dom = new JSDOM('<!doctype html><body></body>', {
+      url: 'https://example.com/', runScripts: 'outside-only',
+    });
+    try {
+      const { window } = dom;
+      window.GM_registerMenuCommand = () => 1;
+      window.GM_unregisterMenuCommand = () => {};
+      await new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
+      const source = require('fs').readFileSync(require('path').join(__dirname, 'auto-linkify.user.js'), 'utf8');
+      window.eval(source);
+      const settle = () => new Promise(resolve => setTimeout(resolve, 450));
+      await check(window, settle);
+      passed++;
+      if (verbose) console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+    } catch (err) {
+      failed++;
+      console.log(`  ${colors.red}✗${colors.reset} ${name}\n    ${err.message}`);
+      if (verbose) console.error(err.stack);
+      if (bail) {
+        printSummary();
+        process.exit(EXIT_CODE.FAILURES);
+      }
+    } finally {
+      dom.window.close();
+    }
+  }
+
+  await testUserscript('6.4 实际脚本监听新增宿主及嵌套 Shadow DOM 的后续变化', async (window, settle) => {
+    const host = window.document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const nestedHost = window.document.createElement('div');
+    const nested = nestedHost.attachShadow({ mode: 'open' });
+    shadow.append(nestedHost);
+    window.document.body.append(host);
+    await settle();
+    shadow.append('https://outer.example/');
+    nested.append('https://inner.example/');
+    await settle();
+    assertEqual(shadow.querySelectorAll('a').length, 1);
+    assertEqual(nested.querySelectorAll('a').length, 1);
+  });
+
+  await testUserscript('6.5 实际脚本监听文本节点原地更新', async (window, settle) => {
+    const text = window.document.createTextNode('普通文本');
+    window.document.body.append(text);
+    await settle();
+    text.nodeValue = 'https://changed.example/';
+    await settle();
+    assertEqual(window.document.body.querySelectorAll('a').length, 1);
+  });
+
   printSummary();
+  process.exitCode = failed ? EXIT_CODE.FAILURES : EXIT_CODE.SUCCESS;
 }
 
 // ─── 工具函数 ─────────────────────────────────────────────────────────────
@@ -546,7 +600,10 @@ try {
     process.exit(EXIT_CODE.RUNTIME_ERROR);
   }
 
-  runTests();
+  runTests().catch((err) => {
+    console.error(err);
+    process.exitCode = EXIT_CODE.RUNTIME_ERROR;
+  });
 } catch (err) {
   console.error(`\n${colors.red}测试执行失败:${colors.reset} ${err.message}`);
   if (verbose) console.error(err.stack);

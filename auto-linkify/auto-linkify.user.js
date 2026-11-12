@@ -203,6 +203,11 @@
   // 观察 root 子树内所有 shadow root（含嵌套），使其内部变动也能被捕捉
   function observeShadowsOf(root) {
     if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+    // TreeWalker 不访问根节点；新增节点本身也可能是 shadow 宿主。
+    if (root.nodeType === Node.ELEMENT_NODE && root.shadowRoot) {
+      observer.observe(root.shadowRoot, { childList: true, characterData: true, subtree: true });
+      observeShadowsOf(root.shadowRoot);
+    }
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
       acceptNode(node) {
         return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
