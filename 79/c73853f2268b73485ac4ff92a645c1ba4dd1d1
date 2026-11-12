@@ -1,0 +1,23 @@
+auto-linkify/auto-linkify.user.js
+  s_14219712d0d769::t_b6ffe14a729c3d 206-210
+auto-linkify/test.js
+  s_14219712d0d769::t_b6ffe14a729c3d 251,507-560,562,603-606
+auto-linkify/README.md
+  s_14219712d0d769::t_b6ffe14a729c3d 10,55,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79c73853f2268b73485ac4ff92a645c1ba4dd1d1",
+  "prompts": {},
+  "sessions": {
+    "s_14219712d0d769": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d015-1cb0-7933-aabf-db144d83d72a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
