@@ -16,7 +16,7 @@ concurrency:
 jobs:
   plan:
     name: 选择变更脚本
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       scripts: ${{ steps.plan.outputs.scripts }}
@@ -40,7 +40,7 @@ jobs:
     name: 检查 ${{ matrix.script }}
     needs: plan
     if: needs.plan.outputs.has-scripts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -70,7 +70,7 @@ jobs:
     name: CI
     if: always()
     needs: [plan, scripts]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: 汇总检查结果
