@@ -1,0 +1,87 @@
+name: 脚本质量检查
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: 选择变更脚本
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scripts: ${{ steps.plan.outputs.scripts }}
+      has-scripts: ${{ steps.plan.outputs.has-scripts }}
+      version-base: ${{ steps.plan.outputs.version-base }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: 验证 CI 检查逻辑
+        run: node --test .github/scripts/ci.test.mjs
+      - name: 生成目录检查列表
+        id: plan
+        run: node .github/scripts/ci.mjs plan
+
+  scripts:
+    name: 检查 ${{ matrix.script }}
+    needs: plan
+    if: needs.plan.outputs.has-scripts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        script: ${{ fromJSON(needs.plan.outputs.scripts) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: 检查结构、元数据、语法与版本
+        env:
+          SCRIPT: ${{ matrix.script }}
+          VERSION_BASE: ${{ needs.plan.outputs.version-base }}
+        run: node .github/scripts/ci.mjs check "$SCRIPT"
+      - name: 安装测试依赖并运行测试
+        if: hashFiles(format('{0}/package.json', matrix.script)) != ''
+        working-directory: ${{ matrix.script }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+
+  result:
+    name: CI
+    if: always()
+    needs: [plan, scripts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: 汇总检查结果
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          HAS_SCRIPTS: ${{ needs.plan.outputs.has-scripts }}
+          SCRIPT_RESULT: ${{ needs.scripts.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          if [ "$HAS_SCRIPTS" = true ]; then
+            test "$SCRIPT_RESULT" = success
+          else
+            test "$SCRIPT_RESULT" = skipped
+          fi

@@ -18,6 +18,35 @@
 
 > 各脚本也可从上表「脚本总览」的 GreasyFork 列直接安装。
 
+## 质量检查
+
+仓库通过 [GitHub Actions](./.github/workflows/ci.yml) 做基础质量检查，无需构建脚本：
+
+| 变更范围 | 检查范围 |
+|----------|----------|
+| 某个脚本目录中的代码、文档、测试或依赖文件 | 只检查该脚本；同时修改多个脚本时分别检查 |
+| 根目录文件或 `.github/` | 检查全部脚本 |
+| 手动运行工作流 | 检查全部脚本 |
+
+工作流在 PR 和推送到 `main` 时触发，自动发现脚本目录，并按目录生成独立检查任务。PR 使用整个分支相对共同祖先的差异，推送使用本次推送前后的差异；首次推送执行全量检查。无相关脚本变更时跳过脚本任务，仍提供固定的 `CI` 汇总结果，可将其设为分支保护的必需检查。
+
+各脚本均检查文件结构、userscript 头部、GM 授权、JavaScript 语法、根目录安装链接，以及当前版本与最新 CHANGELOG 的一致性。有 `package.json` 的脚本还会通过锁文件安装依赖并运行 `npm test`；目前为 auto-linkify 的 31 项测试。CI 自身的目录选择和校验逻辑也有独立测试。
+
+代码修复与版本升级可以分开提交。PR 在最终整体差异中要求修改过的 `.user.js` 升级版本并新增 CHANGELOG 条目；推送到 `main` 时检查当前状态，不要求每个中间提交都升级版本。直接推送代码时，仍需自行确保补齐版本升级提交。
+
+使用 Node.js 24 可在本地运行：
+
+```sh
+node --test .github/scripts/ci.test.mjs
+node .github/scripts/ci.mjs plan
+node .github/scripts/ci.mjs check auto-linkify
+cd auto-linkify
+npm ci --ignore-scripts --no-audit --no-fund
+npm test
+```
+
+`plan` 在本地默认列出全部脚本；`check` 检查指定脚本的结构、语法与当前版本，不执行行为测试。真实站点的选择器、油猴权限、SPA 跳转及触摸交互仍需人工验证。
+
 ## License
 
 仓库整体采用 `LICENSE` 中声明的协议；单个脚本若另有声明，以脚本文件头 `@license` 为准。
