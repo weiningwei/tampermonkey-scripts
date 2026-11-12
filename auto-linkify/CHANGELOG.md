@@ -2,6 +2,16 @@
 
 本项目所有脚本的变更记录遵循 [Keep a Changelog](https://keepachangelog.com/) 风格。
 
+## [1.5.2] - 2026-11-12
+
+### Fixed
+
+- 修复新增元素本身为 Shadow DOM 宿主时，其 Shadow Root 未被观察、后续文本变化无法转换为链接的问题；同时覆盖嵌套 Shadow Root。
+
+### Changed
+
+- 新增直接加载实际脚本的动态 Shadow DOM 与文本原地更新测试，测试总数增至 31；说明开放、封闭及延迟创建 Shadow Root 的支持范围。
+
 ## [1.5.1] - 2026-10-25
 
 ### Fixed
