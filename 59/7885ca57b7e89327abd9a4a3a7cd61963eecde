@@ -1,0 +1,21 @@
+url-replace/url-replace.user.js
+  s_14219712d0d769::t_81df4d7e35ca82 68,75-76,150,157-158,189,540
+url-replace/README.md
+  s_14219712d0d769::t_81df4d7e35ca82 11,15,57,77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "597885ca57b7e89327abd9a4a3a7cd61963eecde",
+  "prompts": {},
+  "sessions": {
+    "s_14219712d0d769": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d015-1cb0-7933-aabf-db144d83d72a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
