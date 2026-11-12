@@ -1,0 +1,22 @@
+pr-comments-expander/pr-comments-expander.user.js
+  s_14219712d0d769::t_c5902adbfad23a 63,188,190,204,441
+  s_14219712d0d769::t_d96201c1c80d27 5,62,229,288,372-373,376-379,382-383,390-393
+pr-comments-expander/README.md
+  s_14219712d0d769::t_d96201c1c80d27 3,7,10,64,67,72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e11476f1bf7700f013644400cd03bc7178de7ff",
+  "prompts": {},
+  "sessions": {
+    "s_14219712d0d769": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d015-1cb0-7933-aabf-db144d83d72a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
