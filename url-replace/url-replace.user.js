@@ -65,13 +65,15 @@
         maxDepth: normalizeDepth(r.maxDepth),
       }));
     }
-    return CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
+    const defaults = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
       from: r.from,
       to: r.to,
       enabled: true,
       minDepth: normalizeDepth(r.minDepth),
       maxDepth: normalizeDepth(r.maxDepth),
     }));
+    GM_setValue(STORAGE_KEY, defaults);
+    return defaults;
   }
 
   // 读取被删除过的默认规则列表
@@ -145,14 +147,15 @@
     }
     const host = u.hostname;
     // 当前路径段数：pathname 按 / 分段去空（/{owner}/{repo} → 2，/{owner}/{repo}/blob/main/x.md → 5），
-    // 用于规则的可选 maxDepth 限制：超过上限视为子网页，规则不参与匹配（按钮不显示）
+    // 用于规则的可选 minDepth/maxDepth 限制：超出范围时不显示按钮
     const pathDepth = u.pathname.split('/').filter(Boolean).length;
     const outsideDepth = (rule) =>
       (typeof rule.minDepth === 'number' && pathDepth < rule.minDepth)
       || (typeof rule.maxDepth === 'number' && pathDepth > rule.maxDepth);
     const strings = new Set();
     for (const rule of rules) {
-      if (!isValidRule(rule) || rule.enabled === false || outsideDepth(rule)) continue; // 停用/超出深度范围的规则不参与匹配
+      // 站点识别独立于启用状态与深度限制，避免排除较长名称后误命中其子串。
+      if (!isValidRule(rule)) continue;
       strings.add(rule.from);
       strings.add(rule.to);
     }
@@ -183,7 +186,7 @@
     ));
   }
 
-  // 生成按钮内容：三列网格（当前串右对齐 | 箭头居中 | 目标串左对齐），
+  // 生成按钮内容：三列网格（from 右对齐 | 箭头居中 | to 左对齐），
   // 配合按钮等宽堆叠，多个按钮的箭头垂直对齐成一条线，长度不一的文案不漂移。
   // 弱化当前串、强调目标串（目标串即切换后网址命中的字符串），箭头体现切换方向
   function formatLabel(sw) {
@@ -534,7 +537,7 @@
     for (const m of matches) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      // 三列网格布局：当前串（右对齐）| 箭头（居中）| 目标串（左对齐），多按钮箭头垂直对齐
+      // 三列网格布局：from（右对齐）| 箭头（居中）| to（左对齐），多按钮箭头垂直对齐
       btn.style.cssText = BASE_BUTTON_STYLE
         + ';display:grid;grid-template-columns:1fr auto 1fr;column-gap:6px;align-items:center;width:100%';
       btn.innerHTML = formatLabel(m);
