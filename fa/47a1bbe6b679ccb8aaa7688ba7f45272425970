@@ -1,0 +1,19 @@
+auto-linkify/package-lock.json
+  s_14219712d0d769::t_a98e6d31425e25 13,27,47,71,99,122,142,152,159,173,186,200,207,221,238,245,255,270,283,293,303,316,332,349,359,384,398,411,424,440,453,466,479,493,506,513,554,561,571,581,594,601,608,621,631,638,645,658,665,678,685,698,711,724,734,748,758,772,794,804
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa47a1bbe6b679ccb8aaa7688ba7f45272425970",
+  "prompts": {},
+  "sessions": {
+    "s_14219712d0d769": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d015-1cb0-7933-aabf-db144d83d72a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
