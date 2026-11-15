@@ -26,7 +26,7 @@
 - 破坏性变更必须升 `major`，并在该脚本 `CHANGELOG.md` 的对应条目中说明迁移方式；对应条目使用 `Removed` / `Changed` 分类
 - 未发布到 `1.0.0` 的脚本（`0.y.z`）按 semver 规定不保证稳定：`0.y` 递增可以包含破坏性变更，`z` 仍只放修复；脚本对外接口稳定后发布 `1.0.0`，之后按上述 major/minor/patch 执行
 - Do not add emojis or change versions in CHANGELOG/README without a corresponding `.user.js` change
-- 代码及说明修复与版本号、CHANGELOG 更新分开提交；CI 在 PR 中按完整差异检查版本递增，不要求每个中间提交都升级版本。
+- 代码及说明修复与版本号、CHANGELOG 更新分开提交，但必须一同推送或放在同一个 PR；CI 按整体差异检查版本递增，不要求范围内每个中间提交都升级版本，但推送后的净结果必须已升级版本。
 
 ## Adding a new script
 
@@ -45,7 +45,7 @@
 - Other scripts (e.g. `url-replace`) have no automated tests: install the `.user.js` into Tampermonkey/Violentmonkey and verify behavior on real pages.
 - GitHub Actions 在 PR、推送到 `main` 和手动触发时运行。脚本目录内的变更只检查对应脚本；根目录文件或 `.github/` 变更检查全部，手动触发也检查全部。
 - CI 检查目录结构、userscript 元数据、GM 授权、JavaScript 语法、根 README 安装链接、版本与 CHANGELOG 对应关系；带 `package.json` 的脚本额外执行 `npm ci` 和 `npm test`，须提交锁文件。
-- PR 按共同祖先至 PR 分支最新状态检查版本递增；推送到 `main` 只检查当前版本与 CHANGELOG 对应，不检查每次提交的版本递增。自动检查无法替代真实站点的安装与行为验证。
+- PR 按共同祖先至 PR 分支最新状态检查版本递增；推送到 `main` 按本次推送范围（`before`..`after`）检查，同样要求推送后的净结果已升级版本；首次推送没有基线，只检查当前版本与 CHANGELOG 对应。自动检查无法替代真实站点的安装与行为验证。
 - 本地检查：`node --test .github/scripts/ci.test.mjs`；`node .github/scripts/ci.mjs plan`；`node .github/scripts/ci.mjs check <脚本目录>`。
 
 ## Git
