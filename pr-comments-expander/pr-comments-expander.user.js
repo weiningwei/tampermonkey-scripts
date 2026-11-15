@@ -250,6 +250,7 @@
       'font:12px/1.4 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif',
       'box-shadow:0 2px 10px rgba(0,0,0,.3)',
       'user-select:none',
+      'touch-action:none',
       'cursor:move',
     ].join(';');
 
@@ -300,20 +301,15 @@
     panel.style.top = clamp(window.innerHeight - rect.height - 16, 4, window.innerHeight - rect.height - 4) + 'px';
   }
 
-  // 让面板可拖动（鼠标 + 触摸），面板上任意位置（含按钮）都能作为拖动起点：
-  // 移动超过阈值判定为拖动，松手后吞掉紧随的 click 并把位置持久化到 GM 存储；
-  // 未移动（轻点）则不拦截，按钮点击正常触发「展开评论」。位置限制在视口内。
+  // 让面板可拖动（Pointer Events 统一鼠标 / 触摸 / 触控笔），面板上任意位置（含按钮）
+  // 都能作为拖动起点：移动超过阈值判定为拖动，松手后吞掉紧随的 click 并把位置持久化到
+  // GM 存储；未移动（轻点）则不拦截，按钮点击正常触发「展开评论」。位置限制在视口内。
+  // 面板样式带 touch-action:none，触摸拖动不会被页面滚动接管，按钮轻点仍会合成 click。
   function makeDraggable(el) {
     let dragging = false;
-    let startedOnButton = false;
     let startX = 0, startY = 0, startLeft = 0, startTop = 0, moved = false;
 
-    const pointOf = (e) =>
-      e.touches && e.touches.length
-        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
-        : { x: e.clientX, y: e.clientY };
-
-    // 拖动后吞掉同一次操作紧跟的 click（click 在 mouseup/touchend 后同步派发，
+    // 拖动后吞掉同一次操作紧跟的 click（click 在 pointerup 后同步派发，
     // 先于 setTimeout 回调），防止拖动被误判成按钮点击；无 click 时立即自行移除
     function killNextClick() {
       const kill = (e) => { e.stopPropagation(); e.preventDefault(); };
@@ -322,12 +318,11 @@
     }
 
     function onDown(e) {
-      if (e.button !== undefined && e.button !== 0) return; // 仅左键
-      startedOnButton = !!e.target.closest('.pce-drag-exclude');
+      if (e.button !== undefined && e.button !== 0) return; // 仅左键 / 触摸 / 笔主键
       dragging = true;
       moved = false;
-      const p = pointOf(e);
-      startX = p.x; startY = p.y;
+      startX = e.clientX;
+      startY = e.clientY;
       const rect = el.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
@@ -336,42 +331,35 @@
       el.style.left = startLeft + 'px';
       el.style.top = startTop + 'px';
       el.style.cursor = 'grabbing';
-      document.addEventListener('mousemove', onMove, { passive: false });
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-      // 触摸起点在按钮上时不能 preventDefault，否则浏览器不再合成 click，轻点会失效
-      if (!startedOnButton && e.cancelable) e.preventDefault();
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
     }
 
     function onMove(e) {
       if (!dragging) return;
-      const p = pointOf(e);
-      const dx = p.x - startX;
-      const dy = p.y - startY;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
       const w = el.offsetWidth, h = el.offsetHeight;
       el.style.left = clamp(startLeft + dx, 4, window.innerWidth - w - 4) + 'px';
       el.style.top = clamp(startTop + dy, 4, window.innerHeight - h - 4) + 'px';
-      if (e.cancelable) e.preventDefault();
     }
 
     function onUp() {
       if (!dragging) return;
       dragging = false;
       el.style.cursor = 'move';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
       if (moved) {
         GM_setValue(PANEL_POS_KEY, { left: el.style.left, top: el.style.top });
         killNextClick();
       }
     }
 
-    el.addEventListener('mousedown', onDown);
-    el.addEventListener('touchstart', onDown, { passive: false });
+    el.addEventListener('pointerdown', onDown);
   }
 
   // 恢复位置、状态文字变宽或视口变化时都重新限制位置。
