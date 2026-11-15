@@ -45,12 +45,14 @@
     count: 0,
   };
 
-  // 判断节点是否位于需要跳过的祖先标签内
-  function isInSkipZone(node) {
-    let el = node.parentElement;
+  // 判断节点（含元素自身）是否位于需要跳过的标签内。
+  // 祖先链跨过 shadow 边界继续向上，避免 shadow 内的文本看不到外部的跳过标签。
+  function isInSkippedTree(node) {
+    let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
     while (el) {
       if (CONFIG.SKIP_TAGS.has(el.tagName)) return true;
-      el = el.parentElement;
+      const root = el.getRootNode && el.getRootNode();
+      el = el.parentElement || (root && root.host) || null;
     }
     return false;
   }
@@ -74,7 +76,7 @@
   function linkifyTextNode(textNode, skipCheck = false) {
     if (processed.has(textNode)) return;
     if (!textNode.parentNode) return;
-    if (!skipCheck && isInSkipZone(textNode)) {
+    if (!skipCheck && isInSkippedTree(textNode)) {
       processed.add(textNode);
       return;
     }
@@ -149,9 +151,11 @@
         acceptNode(node) {
           if (node.nodeType === Node.TEXT_NODE) {
             if (processed.has(node)) return NodeFilter.FILTER_REJECT;
-            if (isInSkipZone(node)) return NodeFilter.FILTER_REJECT;
+            if (isInSkippedTree(node)) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
           }
+          // 跳过标签整棵剪枝，连同其 shadow root 一起，内部文本不再参与转换
+          if (CONFIG.SKIP_TAGS.has(node.tagName)) return NodeFilter.FILTER_REJECT;
           return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
         }
       }
@@ -174,6 +178,8 @@
   // 遍历 root 下所有文本节点并处理（含 shadow root 内的文本）
   function linkify(root) {
     if (!root) return;
+    // 扫描起点自身可能就在跳过标签内（如整棵 <pre><x-host> 一次性插入）
+    if (isInSkippedTree(root)) return;
     const nodes = [];
     collectTextNodes(root, nodes);
     for (const node of nodes) linkifyTextNode(node, true);

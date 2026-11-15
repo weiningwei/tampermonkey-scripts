@@ -28,11 +28,13 @@ const CONFIG = {
   ]),
 };
 
-function isInSkipZone(node) {
-  let el = node.parentElement;
+// 与 userscript 一致：判断节点（含元素自身）是否在跳过标签内，祖先链跨过 shadow 边界
+function isInSkippedTree(node) {
+  let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
   while (el) {
     if (CONFIG.SKIP_TAGS.has(el.tagName)) return true;
-    el = el.parentElement;
+    const root = el.getRootNode && el.getRootNode();
+    el = el.parentElement || (root && root.host) || null;
   }
   return false;
 }
@@ -57,7 +59,7 @@ function linkifyTextNode(textNode, skipCheck) {
   if (skipCheck === void 0) skipCheck = false;
   if (processed.has(textNode)) return;
   if (!textNode.parentNode) return;
-  if (!skipCheck && isInSkipZone(textNode)) {
+  if (!skipCheck && isInSkippedTree(textNode)) {
     processed.add(textNode);
     return;
   }
@@ -136,9 +138,11 @@ function collectTextNodes(root, out) {
       acceptNode(node) {
         if (node.nodeType === Node.TEXT_NODE) {
           if (processed.has(node)) return NodeFilter.FILTER_REJECT;
-          if (isInSkipZone(node)) return NodeFilter.FILTER_REJECT;
+          if (isInSkippedTree(node)) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
+        // 跳过标签整棵剪枝，连同其 shadow root 一起
+        if (CONFIG.SKIP_TAGS.has(node.tagName)) return NodeFilter.FILTER_REJECT;
         return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       }
     }
@@ -158,6 +162,8 @@ function collectTextNodes(root, out) {
 
 function linkify(root) {
   if (!root) return;
+  // 扫描起点自身可能就在跳过标签内
+  if (isInSkippedTree(root)) return;
   const nodes = [];
   collectTextNodes(root, nodes);
   for (const node of nodes) linkifyTextNode(node, true);
@@ -396,6 +402,25 @@ async function runTests() {
     assert(s3.querySelector('a') !== null, '第 3 层');
   });
 
+  test('4.4 跳过标签内的 Shadow 文本不转换，普通容器内的仍转换', () => {
+    const dom = createDOM('<pre id="pre"></pre><a id="link"></a><div id="plain"></div>');
+    const { document } = dom.window;
+    const attach = (parent, url) => {
+      const host = document.createElement('x-host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = `<span>${url}</span>`;
+      parent.appendChild(host);
+      return shadow;
+    };
+    const preShadow = attach(document.getElementById('pre'), 'https://code.example/pre');
+    const linkShadow = attach(document.getElementById('link'), 'https://code.example/link');
+    const plainShadow = attach(document.getElementById('plain'), 'https://code.example/plain');
+    linkify(document.body);
+    assertEqual(preShadow.querySelectorAll('a').length, 0, '<pre> 内 shadow 不应生成链接');
+    assertEqual(linkShadow.querySelectorAll('a').length, 0, '<a> 内 shadow 不应生成链接');
+    assertEqual(plainShadow.querySelectorAll('a').length, 1, '普通容器内 shadow 仍应生成链接');
+  });
+
   // ══════════════════════════════════════════════════════════════════════
   console.log(`\n${colors.cyan}5. 边界情况${colors.reset}`);
 
@@ -556,6 +581,49 @@ async function runTests() {
     text.nodeValue = 'https://changed.example/';
     await settle();
     assertEqual(window.document.body.querySelectorAll('a').length, 1);
+  });
+
+  await testUserscript('6.6 实际脚本整棵插入跳过标签时不转换其 Shadow 文本', async (window, settle) => {
+    const attach = (parent, url) => {
+      const host = window.document.createElement('x-host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = `<span>${url}</span>`;
+      parent.appendChild(host);
+      return shadow;
+    };
+    const pre = window.document.createElement('pre');
+    const wrap = window.document.createElement('div');
+    const shadow = attach(pre, 'https://code.example/pre');
+    wrap.appendChild(pre);
+    const control = window.document.createElement('div');
+    const controlShadow = attach(control, 'https://code.example/plain');
+    window.document.body.append(wrap, control);
+    await settle();
+    assertEqual(shadow.querySelectorAll('a').length, 0, '<div><pre> 内 shadow 不应生成链接');
+    assertEqual(controlShadow.querySelectorAll('a').length, 1, '普通容器内 shadow 仍应生成链接');
+  });
+
+  await testUserscript('6.7 实际脚本跳过起点在跳过标签内的扫描', async (window, settle) => {
+    const attach = (parent, url) => {
+      const host = window.document.createElement('x-host');
+      const shadow = host.attachShadow({ mode: 'open' });
+      shadow.innerHTML = `<span>${url}</span>`;
+      parent.appendChild(host);
+      return shadow;
+    };
+    // 起点就是 <pre>：整棵 <pre><x-host> 一次性插入
+    const pre = window.document.createElement('pre');
+    const shadow = attach(pre, 'https://code.example/root');
+    window.document.body.appendChild(pre);
+    await settle();
+    assertEqual(shadow.querySelectorAll('a').length, 0, '起点为 <pre> 时不应生成链接');
+    // 起点是宿主本身，但祖先链含已在页面上的 <pre>
+    const laterPre = window.document.createElement('pre');
+    window.document.body.appendChild(laterPre);
+    await settle();
+    const laterShadow = attach(laterPre, 'https://code.example/later');
+    await settle();
+    assertEqual(laterShadow.querySelectorAll('a').length, 0, '<pre> 内后插入的 shadow 不应生成链接');
   });
 
   printSummary();
