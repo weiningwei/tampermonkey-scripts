@@ -96,11 +96,14 @@
   function findByText() {
     if (!CONFIG.FALLBACK_TEXTS) return [];
     const found = [];
+    // 多个 root 可能互相包含（如 main），用 Set 记录已访问元素，避免重复扫描与 O(n²) 去重
+    const seen = new Set();
     const roots = document.querySelectorAll(CONFIG.FALLBACK_ROOTS);
     for (const root of roots) {
       const candidates = root.querySelectorAll(CONFIG.FALLBACK_TAGS);
       for (const el of candidates) {
-        if (found.indexOf(el) !== -1) continue;
+        if (seen.has(el)) continue;
+        seen.add(el);
         const text = (el.textContent || '').trim();
         if (!text || text.length > 40) continue;
         if (!CONFIG.FALLBACK_TEXTS.test(text)) continue;
