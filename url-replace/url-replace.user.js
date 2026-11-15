@@ -656,8 +656,14 @@
       // didDrag 保留到下方 click 抑制器复位，避免拖动后误触发子按钮
     }
   }
+  // 拖动被系统中断（手势取消、指针丢失）时不会再有 click 跟随，立即复位，
+  // 避免 didDrag 残留导致下一次正常点击被子按钮抑制器吞掉。
+  function abortDrag() {
+    dragState = null;
+    didDrag = false;
+  }
   bar.addEventListener('pointerup', endDrag);
-  bar.addEventListener('pointercancel', endDrag);
+  bar.addEventListener('pointercancel', abortDrag);
 
   // 拖动后抑制子按钮的 click（捕获阶段，先于按钮自身的 click 处理器执行）
   bar.addEventListener('click', (e) => {
