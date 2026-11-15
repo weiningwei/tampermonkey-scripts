@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.1.0
+// @version      0.2.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -45,6 +45,18 @@
 
   function rgbToHex(rgb) {
     return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('').toLowerCase();
+  }
+
+  // 解析 HEX 颜色文本：支持 #c7edcc 完整写法与 #ce3 三位缩写，合法时返回标准 #rrggbb，否则 null
+  function parseHex(text) {
+    const m = typeof text === 'string' ? text.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i) : null;
+    if (!m) return null;
+    const hex = m[1].length === 3 ? m[1].split('').map(c => c + c).join('') : m[1];
+    return '#' + hex.toLowerCase();
+  }
+
+  function hexToRgb(hex) {
+    return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   }
 
   function isValidHex(s) {
@@ -130,6 +142,7 @@
 #${PANEL_ID} .pbg-empty { color:#999; }
 #${PANEL_ID} .pbg-form { display:flex; gap:6px; align-items:center; margin-top:6px; }
 #${PANEL_ID} .pbg-input { width:56px; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; }
+#${PANEL_ID} .pbg-hex-input { width:86px; }
 #${PANEL_ID} .pbg-preview { display:flex; align-items:center; gap:8px; margin-top:8px; }
 #${PANEL_ID} .pbg-preview-chip { width:32px; height:32px; border-radius:6px; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
 #${PANEL_ID} .pbg-hex { color:#666; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -180,11 +193,11 @@
   customGrid.className = 'pbg-grid';
   customSection.append(customLabel, customGrid);
 
-  // RGB 添加表单：三通道输入 + 实时预览 + 添加按钮
+  // RGB / HEX 添加表单：三通道输入 + HEX 输入（双向联动）+ 实时预览 + 添加按钮
   const formSection = document.createElement('div');
   formSection.className = 'pbg-section';
   const formLabel = document.createElement('div');
-  formLabel.textContent = '输入 RGB 添加自定义颜色';
+  formLabel.textContent = '输入 RGB 或 HEX 添加自定义颜色';
   formLabel.className = 'pbg-label';
   const formRow = document.createElement('div');
   formRow.className = 'pbg-form';
@@ -198,7 +211,13 @@
     input.className = 'pbg-input';
     return input;
   });
-  formRow.append(...channelInputs);
+  const hexInput = document.createElement('input');
+  hexInput.type = 'text';
+  hexInput.placeholder = '#hex';
+  hexInput.title = '十六进制颜色（可选）：支持 #c7edcc 完整写法与 #ce3 三位缩写，与 R / G / B 双向联动';
+  hexInput.className = 'pbg-input pbg-hex-input';
+  hexInput.spellcheck = false;
+  formRow.append(...channelInputs, hexInput);
 
   const previewRow = document.createElement('div');
   previewRow.className = 'pbg-preview';
@@ -276,27 +295,47 @@
     else renderPalette();
   }
 
-  // 实时预览：三通道都合法时显示色块与 HEX 值，否则显示提示
-  function syncPreview() {
+  // 读取当前输入的颜色：优先取合法的 HEX 输入框；HEX 为空或非法时回退到 R/G/B 三通道。
+  // 两个入口双向联动，正常情况下取哪边结果一致；都不合法时返回 null。
+  function currentInputHex() {
+    const fromHex = parseHex(hexInput.value);
+    if (fromHex) return fromHex;
     const result = readRgbInputs(channelInputs);
-    if (result.ok) {
-      const hex = rgbToHex(result.rgb);
+    return result.ok ? rgbToHex(result.rgb) : null;
+  }
+
+  // 实时预览：输入合法时显示色块与 HEX 值，否则显示提示
+  function syncPreview() {
+    const hex = currentInputHex();
+    if (hex) {
       previewChip.style.backgroundColor = hex;
-      previewText.textContent = `${hex} · rgb(${result.rgb.join(', ')})`;
+      previewText.textContent = `${hex} · rgb(${hexToRgb(hex).join(', ')})`;
     } else {
       previewChip.style.backgroundColor = '#eee';
-      previewText.textContent = '输入 0~255 的整数后预览';
+      previewText.textContent = '输入 RGB 或 HEX（如 #c7edcc）后预览';
     }
+  }
+
+  // R/G/B 三通道都合法时回写 HEX 输入框，否则清空，保持两个入口一致
+  function syncHexFromChannels() {
+    const result = readRgbInputs(channelInputs);
+    hexInput.value = result.ok ? rgbToHex(result.rgb) : '';
+  }
+
+  // HEX 输入合法时回写 R/G/B 三通道；输入中途（尚不合法）不改动三通道
+  function syncChannelsFromHex() {
+    const hex = parseHex(hexInput.value);
+    if (!hex) return;
+    hexToRgb(hex).forEach((v, i) => { channelInputs[i].value = v; });
   }
 
   // 添加自定义颜色：校验、去重、保存、应用
   function addCustomColor() {
-    const result = readRgbInputs(channelInputs);
-    if (!result.ok) {
-      alert('R / G / B 需为 0~255 的整数。');
+    const hex = currentInputHex();
+    if (!hex) {
+      alert('请输入合法的 RGB（0~255 整数）或 HEX 颜色（如 #c7edcc）。');
       return;
     }
-    const hex = rgbToHex(result.rgb);
     const existsInPresets = CONFIG.PRESETS.some(p => rgbToHex(p.rgb) === hex);
     if (existsInPresets || customColors.includes(hex)) {
       alert('该颜色已存在。');
@@ -305,16 +344,27 @@
     customColors.push(hex);
     saveCustomColors(customColors);
     channelInputs.forEach(input => { input.value = ''; });
+    hexInput.value = '';
     syncPreview();
     setCurrentColor(hex);
   }
 
   addBtn.addEventListener('click', addCustomColor);
   channelInputs.forEach((input) => {
-    input.addEventListener('input', syncPreview);
+    input.addEventListener('input', () => {
+      syncHexFromChannels();
+      syncPreview();
+    });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') addCustomColor();
     });
+  });
+  hexInput.addEventListener('input', () => {
+    syncChannelsFromHex();
+    syncPreview();
+  });
+  hexInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addCustomColor();
   });
 
   resetBtn.addEventListener('click', () => setCurrentColor(null));

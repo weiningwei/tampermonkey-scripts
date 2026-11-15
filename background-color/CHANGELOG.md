@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] - 2026-11-15
+
+### Added
+
+- 自定义颜色新增 HEX 输入框：支持 `#c7edcc` 完整写法与 `#ce3` 三位缩写，与 R / G / B 三通道输入双向联动，输入时实时预览色块与色值；「添加并应用」对两种输入方式统一校验与去重。
+
 ## [0.1.0] - 2026-11-15
 
 ### Added
