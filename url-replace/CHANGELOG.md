@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.19.5] - 2026-11-15
+
+### Changed
+
+- 界面样式集中为一次性注入的样式表（`#url-replace-style`），元素改用 class，移除全部内联样式字符串；工具栏、面板、列表与按钮的视觉值保持不变。
+- 样式优先级由内联变为 id 作用域的类选择器：个别站点对 `button` 等元素使用 `!important` 的全局样式现在可能覆盖本脚本外观，遇到时反馈即可。
+
 ## [0.19.4] - 2026-11-15
 
 ### Fixed
