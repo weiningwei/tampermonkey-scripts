@@ -270,13 +270,15 @@
     btn.addEventListener('click', run);
 
     statusEl = document.createElement('span');
-    setStatus('', 'idle');
 
     panel.appendChild(btn);
     panel.appendChild(statusEl);
     document.body.appendChild(panel);
     makeDraggable(panel);
     positionPanel();
+    // 面板挂载并定位后再写状态：setStatus 会调用 keepPanelInView，
+    // 此时面板已有尺寸与坐标，不会先被夹到视口左上角
+    setStatus('', 'idle');
   }
 
   // 面板初始位置：优先读取上次拖动后的位置，否则默认右下角
