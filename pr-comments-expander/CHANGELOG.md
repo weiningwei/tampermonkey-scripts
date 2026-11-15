@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.6] - 2026-11-15
+
+### Changed
+
+- 面板拖动从 mouse + touch 双套事件改为 Pointer Events 单套实现，行为不变：面板任意位置（含按钮）可拖动、移动超过阈值才算拖动并吞掉紧随的 click、轻点按钮仍触发展开。
+- 面板样式新增 `touch-action:none`，取代原先 touchstart 上的 preventDefault，触摸拖动不会被页面滚动接管。
+
 ## [0.3.5] - 2026-11-15
 
 ### Changed
