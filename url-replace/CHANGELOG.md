@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.19.4] - 2026-11-15
+
+### Fixed
+
+- 拖动被系统中断（`pointercancel`、指针丢失）后不再残留点击抑制状态，下一次正常点击按钮不会被吞掉。
+
+### Changed
+
+- 深度上下限的读取与校验收敛为 `readDepthInputs`，添加表单与列表徽标编辑共用同一套提示文案。
+- 默认规则构造收敛为 `ruleFromConfig`，首次运行初始化、自动合并与重置共用同一份字段映射。
+
 ## [0.19.3] - 2026-11-12
 
 ### Fixed
