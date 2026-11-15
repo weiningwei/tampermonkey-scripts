@@ -82,23 +82,7 @@
     const value = textNode.nodeValue;
     if (!value) return;
 
-    // 是否存在任一匹配模式
-    const hasMatch = CONFIG.PATTERNS.some((re) => re.test(value));
-    if (!hasMatch) {
-      processed.add(textNode);
-      return;
-    }
-
-    const frag = document.createDocumentFragment();
-    let lastIndex = 0;
-    let linksCreated = 0;
-
-    // 用第一个能匹配的正则进行分段（多模式时取最先匹配者）
-    for (const re of CONFIG.PATTERNS) {
-      re.lastIndex = 0;
-    }
-
-    // 取所有模式合并命中的位置
+    // 一次扫描汇总所有模式命中的区间（多模式时按起点排序后合并为并集）
     const positions = [];
     for (const re of CONFIG.PATTERNS) {
       re.lastIndex = 0;
@@ -108,6 +92,15 @@
         positions.push([m.index, m.index + m[0].length, m[0]]);
       }
     }
+    if (!positions.length) {
+      processed.add(textNode);
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    let lastIndex = 0;
+    let linksCreated = 0;
+
     positions.sort((a, b) => a[0] - b[0]);
 
     // 合并重叠区间，避免重复包裹
@@ -120,11 +113,6 @@
       } else {
         merged.push(pos.slice());
       }
-    }
-
-    if (merged.length === 0) {
-      processed.add(textNode);
-      return;
     }
 
     for (const [start, end, snippet] of merged) {
