@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PR Comments Expander（PR 评论全部展开）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.3.4
+// @version      0.3.5
 // @description  GitCode / AtomGit 的 PR 页面按轮次点击评论折叠块，尝试展开被折叠的评论，并显示已点击次数。
 // @author       weiningwei
 // @match        *://gitcode.com/*

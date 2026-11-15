@@ -4,6 +4,13 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.5] - 2026-11-15
+
+### Changed
+
+- 兜底文案查找改用 `Set` 记录已访问元素，`FALLBACK_ROOTS` 互相包含时不再重复扫描，去重由 O(n²) 降为 O(n)。
+- 面板挂载并定位后再写入初始状态文字，避免 `keepPanelInView` 在面板尚未定位时把坐标夹到视口左上角。
+
 ## [0.3.4] - 2026-11-12
 
 ### Fixed
