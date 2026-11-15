@@ -214,14 +214,11 @@
   function formatLabel(sw) {
     const arrow = sw.forward === false ? '←' : '→';
     // forward=true 表示 from→to：当前串是 from，目标串是 to；反向则相反
-    const dim = 'color:rgba(255,255,255,.65)';
-    const strong = 'color:#fff;font-weight:bold';
-    const fromStyle = sw.forward ? dim : strong;
-    const toStyle = sw.forward ? strong : dim;
-    const fromHtml = `<span style="${fromStyle};text-align:right">${escapeHtml(sw.from)}</span>`;
-    const toHtml = `<span style="${toStyle};text-align:left">${escapeHtml(sw.to)}</span>`;
-    const arrowHtml = `<span style="color:#fff;text-align:center">${arrow}</span>`;
-    return fromHtml + arrowHtml + toHtml;
+    const fromClass = sw.forward ? 'urp-from urp-dim' : 'urp-from urp-strong';
+    const toClass = sw.forward ? 'urp-to urp-strong' : 'urp-to urp-dim';
+    return `<span class="${fromClass}">${escapeHtml(sw.from)}</span>`
+      + `<span class="urp-arrow">${arrow}</span>`
+      + `<span class="${toClass}">${escapeHtml(sw.to)}</span>`;
   }
 
   // 打开切换后的网址（url 由各按钮自带；无匹配时提示）
@@ -237,82 +234,103 @@
     }
   }
 
-  const BASE_BUTTON_STYLE = [
-    'padding:10px 16px',
-    'font-size:14px',
-    'line-height:1',
-    'color:#fff',
-    'background:#1a73e8',
-    'border:none',
-    'border-radius:6px',
-    'cursor:pointer',
-    'box-shadow:0 2px 8px rgba(0,0,0,.25)',
-  ].join(';');
+  // 样式集中注入一次，元素只带 class：调整外观不用在多处内联样式字符串之间对照
+  const STYLE_ID = 'url-replace-style';
+  const STYLE_TEXT = `
+#url-replace-bar { position:fixed; right:16px; bottom:16px; z-index:2147483647; display:none; gap:8px; align-items:flex-end; user-select:none; touch-action:none; }
+#url-replace-bar .urp-switch { display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+#url-replace-bar .urp-btn { padding:10px 16px; font-size:14px; line-height:1; color:#fff; background:#1a73e8; border:none; border-radius:6px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); }
+#url-replace-bar .urp-gear { background:#5f6368; padding:10px 12px; }
+#url-replace-bar .urp-switch-btn { display:grid; grid-template-columns:1fr auto 1fr; column-gap:6px; align-items:center; width:100%; }
+#url-replace-bar .urp-from { text-align:right; }
+#url-replace-bar .urp-to { text-align:left; }
+#url-replace-bar .urp-arrow { color:#fff; text-align:center; }
+#url-replace-bar .urp-dim { color:rgba(255,255,255,.65); }
+#url-replace-bar .urp-strong { color:#fff; font-weight:bold; }
+#url-replace-panel { position:fixed; z-index:2147483647; width:280px; padding:12px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); color:#333; font-size:13px; display:none; }
+#url-replace-panel .urp-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+#url-replace-panel .urp-title { font-weight:bold; }
+#url-replace-panel .urp-reset { padding:2px 8px; color:#1a73e8; background:none; border:1px solid #1a73e8; border-radius:4px; cursor:pointer; }
+#url-replace-panel .urp-list { max-height:200px; overflow-y:auto; margin-bottom:8px; }
+#url-replace-panel .urp-form { display:flex; gap:6px; }
+#url-replace-panel .urp-input { flex:1; min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px; }
+#url-replace-panel .urp-add { padding:6px 12px; color:#fff; background:#1a73e8; border:none; border-radius:4px; cursor:pointer; }
+#url-replace-panel .urp-depth-row { display:flex; align-items:center; gap:6px; margin-top:6px; }
+#url-replace-panel .urp-depth-label { color:#666; flex-shrink:0; }
+#url-replace-panel .urp-depth-input { width:64px; padding:6px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; }
+#url-replace-panel .urp-row { display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee; }
+#url-replace-panel .urp-row-left { display:flex; align-items:center; gap:6px; min-width:0; }
+#url-replace-panel .urp-check { cursor:pointer; accent-color:#1a73e8; flex-shrink:0; }
+#url-replace-panel .urp-rule-off { color:#999; text-decoration:line-through; }
+#url-replace-panel .urp-badge { color:#1a73e8; cursor:pointer; border-bottom:1px dashed #1a73e8; flex-shrink:0; white-space:nowrap; }
+#url-replace-panel .urp-badge.is-editing { border-bottom:none; }
+#url-replace-panel .urp-badge-input { width:42px; padding:1px 3px; border:1px solid #1a73e8; border-radius:4px; font-size:12px; box-sizing:border-box; }
+#url-replace-panel .urp-del { padding:2px 8px; color:#d93025; background:none; border:1px solid #d93025; border-radius:4px; cursor:pointer; flex-shrink:0; }
+#url-replace-panel .urp-empty { color:#999; padding:8px 0; }
+`;
+
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = STYLE_TEXT;
+    (document.head || document.documentElement).appendChild(style);
+  }
 
   // 切换按钮容器：一对多时纵向堆叠多个按钮（每个目标一个，等宽对齐）
   const switchWrap = document.createElement('div');
-  switchWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;';
+  switchWrap.className = 'urp-switch';
 
   // 齿轮按钮：开关规则管理面板
   const gearBtn = document.createElement('button');
   gearBtn.type = 'button';
   gearBtn.textContent = '⚙';
   gearBtn.title = '管理规则';
-  gearBtn.style.cssText = BASE_BUTTON_STYLE + ';background:#5f6368;padding:10px 12px;';
+  gearBtn.className = 'urp-btn urp-gear';
 
   // 收起/展开把手已移除（v0.15.0）：未命中页面工具栏整体不注入，无需收起；命中页面按钮少且可拖动。
 
   // 规则管理面板
   const panel = document.createElement('div');
-  panel.style.cssText = [
-    'position:fixed',
-    'z-index:2147483647',
-    'width:280px',
-    'padding:12px',
-    'background:#fff',
-    'border:1px solid #ddd',
-    'border-radius:8px',
-    'box-shadow:0 4px 16px rgba(0,0,0,.2)',
-    'color:#333',
-    'font-size:13px',
-    'display:none',
-  ].join(';');
+  panel.id = 'url-replace-panel';
+  // 初始隐藏由样式表负责，但开关逻辑以 inline display 为准，这里显式置一次
+  panel.style.display = 'none';
 
   const panelHeader = document.createElement('div');
-  panelHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+  panelHeader.className = 'urp-header';
   const panelTitle = document.createElement('span');
   panelTitle.textContent = '规则管理';
-  panelTitle.style.cssText = 'font-weight:bold;';
+  panelTitle.className = 'urp-title';
   const resetBtn = document.createElement('button');
   resetBtn.type = 'button';
   resetBtn.textContent = '重置为默认';
   resetBtn.title = '清空所有规则，恢复 CONFIG.REPLACEMENTS 默认值';
-  resetBtn.style.cssText = 'padding:2px 8px;color:#1a73e8;background:none;border:1px solid #1a73e8;border-radius:4px;cursor:pointer;';
+  resetBtn.className = 'urp-reset';
   panelHeader.append(panelTitle, resetBtn);
 
   const listEl = document.createElement('div');
-  listEl.style.cssText = 'max-height:200px;overflow-y:auto;margin-bottom:8px;';
+  listEl.className = 'urp-list';
 
   const formRow = document.createElement('div');
-  formRow.style.cssText = 'display:flex;gap:6px;';
+  formRow.className = 'urp-form';
   const fromInput = document.createElement('input');
   fromInput.placeholder = 'from';
-  fromInput.style.cssText = 'flex:1;min-width:0;padding:6px;border:1px solid #ccc;border-radius:4px;';
+  fromInput.className = 'urp-input';
   const toInput = document.createElement('input');
   toInput.placeholder = 'to';
-  toInput.style.cssText = 'flex:1;min-width:0;padding:6px;border:1px solid #ccc;border-radius:4px;';
+  toInput.className = 'urp-input';
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.textContent = '添加';
-  addBtn.style.cssText = 'padding:6px 12px;color:#fff;background:#1a73e8;border:none;border-radius:4px;cursor:pointer;';
+  addBtn.className = 'urp-add';
   formRow.append(fromInput, toInput, addBtn);
 
   // 深度范围行：与列表徽标编辑一致的两个输入框（下限 ~ 上限），留空不限
   const depthRow = document.createElement('div');
-  depthRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;';
+  depthRow.className = 'urp-depth-row';
   const depthLabel = document.createElement('span');
   depthLabel.textContent = '深度';
-  depthLabel.style.cssText = 'color:#666;flex-shrink:0;';
+  depthLabel.className = 'urp-depth-label';
   const depthTip = '路径段数范围（可选）：路径按 / 分段计数，超出范围不显示按钮。'
     + '例如都填 2：/{owner}/{repo} 显示，/search、/blob/... 等其他页面不显示。留空不限。';
   const mkDepthInput = () => {
@@ -321,14 +339,14 @@
     input.min = '0';
     input.placeholder = '不限';
     input.title = depthTip;
-    input.style.cssText = 'width:64px;padding:6px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;';
+    input.className = 'urp-depth-input';
     return input;
   };
   const minDepthInput = mkDepthInput();
   const maxDepthInput = mkDepthInput();
   const depthTilde = document.createElement('span');
   depthTilde.textContent = '~';
-  depthTilde.style.cssText = 'color:#666;flex-shrink:0;';
+  depthTilde.className = 'urp-depth-label';
   depthRow.append(depthLabel, minDepthInput, depthTilde, maxDepthInput);
 
   panel.append(panelHeader, listEl, formRow, depthRow);
@@ -350,14 +368,14 @@
     listEl.textContent = '';
     rules.forEach((rule, i) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;';
+      row.className = 'urp-row';
       const left = document.createElement('div');
-      left.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:0;';
+      left.className = 'urp-row-left';
       const enabledBox = document.createElement('input');
       enabledBox.type = 'checkbox';
       enabledBox.checked = rule.enabled !== false;
       enabledBox.title = enabledBox.checked ? '停用该规则（不参与匹配）' : '启用该规则';
-      enabledBox.style.cssText = 'cursor:pointer;accent-color:#1a73e8;flex-shrink:0;';
+      enabledBox.className = 'urp-check';
       enabledBox.addEventListener('change', () => {
         rule.enabled = enabledBox.checked;
         saveRules();
@@ -366,14 +384,14 @@
       const label = document.createElement('span');
       label.textContent = rule.from + ' → ' + rule.to;
       if (rule.enabled === false) {
-        label.style.cssText = 'color:#999;text-decoration:line-through;'; // 停用的规则置灰加删除线
+        label.className = 'urp-rule-off'; // 停用的规则置灰加删除线
       }
       // 深度范围徽标：显示当前限制（=2级 / 2~3级 / ≥N级 / ≤N级 / 不限），点击可原地编辑，悬停显示含义说明
       const depthTip = '深度范围：网址路径按 / 分段计数，超出范围则不显示按钮。'
         + '例如 2~2：/{owner}/{repo} 仓库页显示，/search、/blob/... 等其他页面不显示。点击可修改，两端都清空保存为不限。';
       const depthBadge = document.createElement('span');
       depthBadge.title = depthTip;
-      depthBadge.style.cssText = 'color:#1a73e8;cursor:pointer;border-bottom:1px dashed #1a73e8;flex-shrink:0;white-space:nowrap;';
+      depthBadge.className = 'urp-badge';
       const badgeText = () => {
         const min = typeof rule.minDepth === 'number' ? rule.minDepth : undefined;
         const max = typeof rule.maxDepth === 'number' ? rule.maxDepth : undefined;
@@ -388,14 +406,14 @@
       depthBadge.addEventListener('click', () => {
         if (depthBadge.querySelector('input')) return; // 已在编辑中
         depthBadge.title = '';
-        depthBadge.style.borderBottom = 'none';
+        depthBadge.classList.add('is-editing');
         const mkInput = (val) => {
           const input = document.createElement('input');
           input.type = 'number';
           input.min = '0';
           input.value = typeof val === 'number' ? val : '';
           input.placeholder = '不限';
-          input.style.cssText = 'width:42px;padding:1px 3px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;box-sizing:border-box;';
+          input.className = 'urp-badge-input';
           return input;
         };
         const minInput = mkInput(rule.minDepth);
@@ -425,7 +443,7 @@
           finished = true;
           depthBadge.textContent = badgeText();
           depthBadge.title = depthTip;
-          depthBadge.style.borderBottom = '1px dashed #1a73e8';
+          depthBadge.classList.remove('is-editing');
         }
         [minInput, maxInput].forEach((input) => {
           input.addEventListener('keydown', (e) => {
@@ -445,7 +463,7 @@
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.textContent = '删除';
-      delBtn.style.cssText = 'padding:2px 8px;color:#d93025;background:none;border:1px solid #d93025;border-radius:4px;cursor:pointer;flex-shrink:0;';
+      delBtn.className = 'urp-del';
       delBtn.addEventListener('click', () => {
         // 若删除的是默认规则，记入已删除列表，避免自动合并时被重新加回
         const key = rule.from + '>' + rule.to;
@@ -466,7 +484,7 @@
     if (rules.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = '暂无规则';
-      empty.style.cssText = 'color:#999;padding:8px 0;';
+      empty.className = 'urp-empty';
       listEl.appendChild(empty);
     }
   }
@@ -523,8 +541,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       // 三列网格布局：from（右对齐）| 箭头（居中）| to（左对齐），多按钮箭头垂直对齐
-      btn.style.cssText = BASE_BUTTON_STYLE
-        + ';display:grid;grid-template-columns:1fr auto 1fr;column-gap:6px;align-items:center;width:100%';
+      btn.className = 'urp-btn urp-switch-btn';
       btn.innerHTML = formatLabel(m);
       btn.title = m.url;
       btn.addEventListener('click', () => openReplaced(m.url));
@@ -537,7 +554,7 @@
   // 初始 display:none，由 refresh() 按命中情况显式设为 flex/none
   // align-items:flex-end：多按钮纵向堆叠时齿轮与最下方按钮底端对齐，视觉上更自然
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;display:none;gap:8px;align-items:flex-end;user-select:none;touch-action:none;';
+  bar.id = 'url-replace-bar';
   bar.append(switchWrap, gearBtn);
 
   // 右键工具栏任意位置：打开/关闭规则管理面板（与齿轮等效的快捷入口）
@@ -675,6 +692,7 @@
 
   function init() {
     if (!document.body) return;
+    injectStyles();
     watchUrlChange();
     document.body.appendChild(bar);
     document.body.appendChild(panel);
