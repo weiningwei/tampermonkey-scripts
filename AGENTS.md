@@ -20,6 +20,11 @@
 ## Versioning
 
 - `@version` is semver; every `.user.js` change must bump `@version` and add a Keep a Changelog entry in that script's `CHANGELOG.md`
+- `patch`（`x.y.z` 的 `z`）：只修复缺陷，或调整文案、样式、内部实现；不新增用户可操作入口，升级后无需迁移
+- `minor`（`x.y.z` 的 `y`）：向下兼容的新能力，如新增或增强菜单命令、面板控件、配置项、规则字段；旧存储与旧操作方式继续有效
+- `major`（`x`）：破坏性变更，包括删除或重命名菜单命令、面板控件、`CONFIG` 字段；存储键或数据格式需要迁移且无法自动兼容；收窄 `@match` 使原本生效的站点失效；变更 `GM_*` 授权
+- 破坏性变更必须升 `major`，并在该脚本 `CHANGELOG.md` 的对应条目中说明迁移方式；对应条目使用 `Removed` / `Changed` 分类
+- 未发布到 `1.0.0` 的脚本（`0.y.z`）按 semver 规定不保证稳定：`0.y` 递增可以包含破坏性变更，`z` 仍只放修复；脚本对外接口稳定后发布 `1.0.0`，之后按上述 major/minor/patch 执行
 - Do not add emojis or change versions in CHANGELOG/README without a corresponding `.user.js` change
 - 代码及说明修复与版本号、CHANGELOG 更新分开提交；CI 在 PR 中按完整差异检查版本递增，不要求每个中间提交都升级版本。
 
