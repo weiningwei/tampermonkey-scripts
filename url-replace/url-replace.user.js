@@ -54,6 +54,29 @@
   function normalizeDepth(v) {
     return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined;
   }
+
+  // 读取一对深度输入框（下限 / 上限），留空表示不限。非法输入与下限大于上限会直接提示，
+  // 并返回需要聚焦的输入框；成功时返回 { minDepth, maxDepth }，字段为 undefined 表示不限。
+  function readDepthInputs(minInput, maxInput) {
+    const readBound = (input) => {
+      const raw = input.value.trim();
+      if (raw === '') return { ok: true, val: undefined };
+      const v = Number(raw);
+      if (!Number.isInteger(v) || v < 0) return { ok: false };
+      return { ok: true, val: v };
+    };
+    const lo = readBound(minInput);
+    const hi = readBound(maxInput);
+    if (!lo.ok || !hi.ok) {
+      alert('深度范围须为非负整数（路径按 / 分段计数），留空表示不限。');
+      return { error: lo.ok ? maxInput : minInput };
+    }
+    if (lo.val !== undefined && hi.val !== undefined && lo.val > hi.val) {
+      alert('深度下限不能大于上限。');
+      return { error: minInput };
+    }
+    return { minDepth: lo.val, maxDepth: hi.val };
+  }
   function loadRules() {
     const stored = GM_getValue(STORAGE_KEY, null);
     if (Array.isArray(stored)) {
@@ -384,33 +407,17 @@
         depthBadge.append(minInput, tilde, maxInput);
         minInput.focus();
 
-        const readBound = (input) => {
-          const raw = input.value.trim();
-          if (raw === '') return { ok: true, val: undefined };
-          const v = Number(raw);
-          if (!Number.isInteger(v) || v < 0) return { ok: false };
-          return { ok: true, val: v };
-        };
         let finished = false; // 防止 Esc 取消后移除输入框又触发 blur 导致误提交
         function commit() {
           if (finished) return;
-          const lo = readBound(minInput);
-          const hi = readBound(maxInput);
-          if (!lo.ok || !hi.ok) {
-            alert('深度范围须为非负整数（路径按 / 分段计数），留空表示不限。');
-            finished = false;
-            (lo.ok ? maxInput : minInput).focus();
-            return;
-          }
-          if (lo.val !== undefined && hi.val !== undefined && lo.val > hi.val) {
-            alert('深度下限不能大于上限。');
-            finished = false;
-            minInput.focus();
+          const depth = readDepthInputs(minInput, maxInput);
+          if (depth.error) {
+            depth.error.focus();
             return;
           }
           finished = true;
-          if (lo.val === undefined) delete rule.minDepth; else rule.minDepth = lo.val;
-          if (hi.val === undefined) delete rule.maxDepth; else rule.maxDepth = hi.val;
+          if (depth.minDepth === undefined) delete rule.minDepth; else rule.minDepth = depth.minDepth;
+          if (depth.maxDepth === undefined) delete rule.maxDepth; else rule.maxDepth = depth.maxDepth;
           saveRules();
           refresh();
         }
@@ -478,26 +485,11 @@
       return;
     }
     // 深度范围：与列表徽标编辑一致，两个输入框分别为下限/上限，留空不限
-    const readBound = (input) => {
-      const raw = input.value.trim();
-      if (raw === '') return { ok: true, val: undefined };
-      const v = Number(raw);
-      if (!Number.isInteger(v) || v < 0) return { ok: false };
-      return { ok: true, val: v };
-    };
-    const lo = readBound(minDepthInput);
-    const hi = readBound(maxDepthInput);
-    if (!lo.ok || !hi.ok) {
-      alert('深度范围须为非负整数（路径按 / 分段计数），留空表示不限。');
-      return;
-    }
-    if (lo.val !== undefined && hi.val !== undefined && lo.val > hi.val) {
-      alert('深度下限不能大于上限。');
-      return;
-    }
+    const depth = readDepthInputs(minDepthInput, maxDepthInput);
+    if (depth.error) return;
     const depthFields = {};
-    if (lo.val !== undefined) depthFields.minDepth = lo.val;
-    if (hi.val !== undefined) depthFields.maxDepth = hi.val;
+    if (depth.minDepth !== undefined) depthFields.minDepth = depth.minDepth;
+    if (depth.maxDepth !== undefined) depthFields.maxDepth = depth.maxDepth;
     rules.push({ from, to, ...depthFields });
     saveRules();
     fromInput.value = '';
