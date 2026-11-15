@@ -136,9 +136,18 @@ test('实际 Git 事件按整体差异选择脚本，支持拆分提交、首次
     execFileSync(process.execPath, [ciPath, 'check', 'example'], { cwd: root, env: { ...env, VERSION_BASE: base } });
     const push = runPlan('push', { before: base, after: head });
     assert.deepEqual(JSON.parse(push.scripts), ['example']);
-    assert.equal(push['version-base'], '');
-    // 中间的代码提交可以单独推送，PR 最终状态仍会要求升级版本。
-    assert.equal(runPlan('push', { before: base, after: codeCommit })['version-base'], '');
+    assert.equal(push['version-base'], base);
+    execFileSync(process.execPath, [ciPath, 'check', 'example'], { cwd: root, env: { ...env, VERSION_BASE: push['version-base'] } });
+    // 推送未升级版本的代码提交会被拒绝，因此版本提交必须与代码提交一同推送。
+    const partial = runPlan('push', { before: base, after: codeCommit });
+    assert.equal(partial['version-base'], base);
+    git('checkout', '--detach', codeCommit);
+    assert.throws(() => execFileSync(process.execPath, [ciPath, 'check', 'example'], {
+      cwd: root, env: { ...env, VERSION_BASE: partial['version-base'] }, stdio: 'pipe'
+    }), error => /必须升级版本/.test(String(error.stderr)));
+    git('checkout', 'main');
+    // 首次推送没有基线，只检查当前版本与 CHANGELOG 对应。
+    assert.equal(runPlan('push', { before: '0'.repeat(40), after: head })['version-base'], '');
     assert.deepEqual(JSON.parse(runPlan('push', { before: '0'.repeat(40), after: head }).scripts), ['another', 'example']);
     assert.deepEqual(JSON.parse(runPlan('workflow_dispatch', {}).scripts), ['another', 'example']);
     git('rm', 'another/another.user.js');

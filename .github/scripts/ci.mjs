@@ -132,8 +132,9 @@ export function eventRange(eventName, event) {
     const base = git('merge-base', event.pull_request.base.sha, event.pull_request.head.sha).trim();
     return { base, head: event.pull_request.head.sha, versionBase: base };
   }
+  // 推送按本次范围 before..after 检查，要求推送后的净结果已升级版本；首次推送没有基线。
   if (eventName === 'push' && event.before && !/^0+$/.test(event.before)) {
-    return { base: event.before, head: event.after, versionBase: '' };
+    return { base: event.before, head: event.after, versionBase: event.before };
   }
   return { base: '', head: 'HEAD', versionBase: '' };
 }
