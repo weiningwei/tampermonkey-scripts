@@ -49,6 +49,17 @@
       && r.from !== '' && r.to !== '';
   }
 
+  // 由 CONFIG 默认规则生成运行时规则（首次运行初始化、自动合并、重置共用）
+  function ruleFromConfig(r) {
+    return {
+      from: r.from,
+      to: r.to,
+      enabled: true,
+      minDepth: normalizeDepth(r.minDepth),
+      maxDepth: normalizeDepth(r.maxDepth),
+    };
+  }
+
   // 读取规则：优先取存储值；首次运行用 CONFIG 初始化。
   // 统一补全字段：enabled 缺失视为启用；minDepth/maxDepth 仅保留合法的非负整数，其余视为不限
   function normalizeDepth(v) {
@@ -88,13 +99,7 @@
         maxDepth: normalizeDepth(r.maxDepth),
       }));
     }
-    const defaults = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
-      from: r.from,
-      to: r.to,
-      enabled: true,
-      minDepth: normalizeDepth(r.minDepth),
-      maxDepth: normalizeDepth(r.maxDepth),
-    }));
+    const defaults = CONFIG.REPLACEMENTS.filter(isValidRule).map(ruleFromConfig);
     GM_setValue(STORAGE_KEY, defaults);
     return defaults;
   }
@@ -133,13 +138,7 @@
         }
         continue;
       }
-      rules.push({
-        from: r.from,
-        to: r.to,
-        enabled: true,
-        minDepth: normalizeDepth(r.minDepth),
-        maxDepth: normalizeDepth(r.maxDepth),
-      });
+      rules.push(ruleFromConfig(r));
       changed = true;
     }
     if (shouldMigrateFields) {
@@ -508,13 +507,7 @@
   // 重置为默认规则
   function resetRules() {
     if (!confirm('确定清空所有规则并恢复默认值吗？')) return;
-    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(r => ({
-      from: r.from,
-      to: r.to,
-      enabled: true,
-      minDepth: normalizeDepth(r.minDepth),
-      maxDepth: normalizeDepth(r.maxDepth),
-    }));
+    rules = CONFIG.REPLACEMENTS.filter(isValidRule).map(ruleFromConfig);
     GM_setValue(DELETED_DEFAULTS_KEY, []); // 重置即恢复全部默认规则，清空已删除记录
     saveRules();
     refresh();
