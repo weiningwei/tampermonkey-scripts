@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-11-16
+
+### Added
+
+- 页面右下角新增可拖动的浮动按钮（🎨）：点击即可打开/关闭背景色设置面板，拖动位置全局持久化；新增 `CONFIG.FLOATING_BUTTON` 开关（默认开启，可关闭常驻按钮仅保留油猴菜单入口）。
+
 ## [0.3.0] - 2026-11-16
 
 ### Added

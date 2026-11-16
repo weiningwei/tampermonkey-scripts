@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.3.0
+// @version      0.4.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -31,15 +31,20 @@
       { name: '葛巾紫', rgb: [234, 227, 239] },
       { name: '极简灰', rgb: [242, 242, 242] },
     ],
+    // 是否在页面右下角显示浮动按钮（true）：点击即可打开背景色设置面板，可拖动换位。
+    // 设为 false 则不显示浮动按钮，仅能通过油猴扩展菜单打开面板。
+    FLOATING_BUTTON: true,
   };
   /* ------------------------------------------------------------------- */
 
   const STORAGE_COLOR_KEY = 'background-color.color'; // 当前生效颜色（#rrggbb 或 null 表示默认）
   const STORAGE_CUSTOM_KEY = 'background-color.customColors'; // 自定义颜色列表（#rrggbb 数组）
+  const FAB_POS_KEY = 'background-color.fabPos'; // 浮动按钮拖动后的位置（右下锚定）
 
   const PANEL_ID = 'background-color-panel';
   const UI_STYLE_ID = 'background-color-ui-style';
   const BG_STYLE_ID = 'background-color-style';
+  const FAB_ID = 'background-color-fab';
 
   /* ----------------------------- 存取与工具 ----------------------------- */
 
@@ -147,6 +152,8 @@
 #${PANEL_ID} .pbg-preview-chip { width:32px; height:32px; border-radius:6px; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
 #${PANEL_ID} .pbg-hex { color:#666; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #${PANEL_ID} .pbg-add { margin-left:auto; padding:6px 12px; color:#fff; background:#1a73e8; border:none; border-radius:4px; cursor:pointer; flex-shrink:0; }
+#${FAB_ID} { position:fixed; right:16px; bottom:16px; z-index:2147483646; width:38px; height:38px; line-height:38px; padding:0; text-align:center; font-size:18px; color:#fff; background:#1a73e8; border:none; border-radius:50%; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); user-select:none; touch-action:none; }
+#${FAB_ID}:hover { background:#1765cc; }
 `;
 
   function injectUiStyles() {
@@ -374,7 +381,88 @@
 
   resetBtn.addEventListener('click', () => setCurrentColor(null));
 
-  // 打开/关闭面板（油猴扩展菜单共用）
+  /* ----------------------------- 浮动按钮 ----------------------------- */
+
+  // 右下角常驻圆形按钮：点击打开/关闭面板，按住拖动可换位置并持久化（与油猴菜单入口等效）
+  const fab = document.createElement('button');
+  fab.type = 'button';
+  fab.id = FAB_ID;
+  fab.textContent = '🎨';
+  fab.title = '背景色设置（点击打开，可拖动换位）';
+
+  // 将浮动按钮定位到距视口右下角 (right, bottom) 的位置，并限制在视口内
+  function setFabPos(right, bottom) {
+    const maxRight = Math.max(0, window.innerWidth - fab.offsetWidth);
+    const maxBottom = Math.max(0, window.innerHeight - fab.offsetHeight);
+    fab.style.right = Math.min(Math.max(0, right), maxRight) + 'px';
+    fab.style.bottom = Math.min(Math.max(0, bottom), maxBottom) + 'px';
+    fab.style.left = 'auto';
+    fab.style.top = 'auto';
+  }
+
+  // 恢复上次拖动保存的位置
+  function applySavedFabPos() {
+    const saved = GM_getValue(FAB_POS_KEY, null);
+    if (saved && typeof saved.right === 'number' && typeof saved.bottom === 'number') {
+      setFabPos(saved.right, saved.bottom);
+    }
+  }
+
+  // 拖动逻辑：按下后超过阈值即视为拖动（区别于点击），松开时保存位置
+  const DRAG_THRESHOLD = 4;
+  let dragState = null;
+  let didDrag = false;
+
+  fab.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const rect = fab.getBoundingClientRect();
+    dragState = {
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetRight: rect.right - e.clientX,
+      offsetBottom: rect.bottom - e.clientY,
+    };
+    didDrag = false;
+    // 不在此处 setPointerCapture：否则 pointerup/click 会被重定向到按钮，导致点击失效
+  });
+
+  fab.addEventListener('pointermove', (e) => {
+    if (!dragState) return;
+    if (!didDrag && Math.hypot(e.clientX - dragState.startX, e.clientY - dragState.startY) < DRAG_THRESHOLD) return;
+    if (!didDrag) {
+      didDrag = true;
+      // 确认是拖动后再捕获指针：拖出按钮不丢事件，又不影响普通点击
+      try { fab.setPointerCapture(e.pointerId); } catch (_) { /* 指针可能已释放，忽略 */ }
+    }
+    setFabPos(window.innerWidth - e.clientX - dragState.offsetRight, window.innerHeight - e.clientY - dragState.offsetBottom);
+  });
+
+  function endFabDrag() {
+    if (dragState && didDrag) {
+      const rect = fab.getBoundingClientRect();
+      GM_setValue(FAB_POS_KEY, { right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.bottom });
+      // didDrag 保留到下方 click 抑制器复位，避免拖动后误开面板
+    }
+    dragState = null;
+  }
+  // 拖动被系统中断（手势取消、指针丢失）时不会再有 click 跟随，立即复位
+  function abortFabDrag() {
+    dragState = null;
+    didDrag = false;
+  }
+  fab.addEventListener('pointerup', endFabDrag);
+  fab.addEventListener('pointercancel', abortFabDrag);
+
+  // 拖动后抑制本次 click（捕获阶段，先于按钮自身的 click 处理器执行）
+  fab.addEventListener('click', (e) => {
+    if (didDrag) {
+      e.stopPropagation();
+      e.preventDefault();
+      didDrag = false;
+    }
+  }, true);
+
+  // 打开/关闭面板（浮动按钮 / 油猴扩展菜单共用）
   function togglePanel() {
     const show = panel.style.display === 'none';
     panel.style.display = show ? 'block' : 'none';
@@ -384,10 +472,13 @@
     }
   }
 
-  // 点击面板以外任意位置自动关闭（符合常见弹层习惯）
+  // 点击浮动按钮开/关面板（拖动结束后的 click 已被上面的抑制器拦截）
+  fab.addEventListener('click', togglePanel);
+
+  // 点击面板与浮动按钮以外的任意位置，自动关闭面板（符合常见弹层习惯）
   document.addEventListener('pointerdown', (e) => {
     if (panel.style.display !== 'block') return;
-    if (panel.contains(e.target)) return;
+    if (panel.contains(e.target) || (CONFIG.FLOATING_BUTTON && fab.contains(e.target))) return;
     panel.style.display = 'none';
   });
 
@@ -396,6 +487,10 @@
     injectUiStyles();
     applyColor(currentColor);
     document.body.appendChild(panel);
+    if (CONFIG.FLOATING_BUTTON) {
+      document.body.appendChild(fab);
+      applySavedFabPos();
+    }
     GM_registerMenuCommand('更换背景色', togglePanel);
   }
 
