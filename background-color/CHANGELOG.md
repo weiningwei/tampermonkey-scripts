@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.1] - 2026-11-16
+
+### Fixed
+
+- 面板打开时按 Esc 现在可以关闭，与点击面板外关闭的行为保持一致。
+
 ## [0.4.0] - 2026-11-16
 
 ### Added

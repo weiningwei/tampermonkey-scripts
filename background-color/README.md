@@ -12,7 +12,7 @@
 - **全局持久化**：当前颜色与自定义颜色列表通过 `GM_getValue` / `GM_setValue` 跨站点保存，刷新或打开任意页面自动应用，兼容 Tampermonkey / Violentmonkey。
 - **生效方式**：注入独立样式规则 `html, body { background-color: 颜色 !important; }`，可压过大多数站点的普通背景声明。
 - 仅顶层页面运行（`@noframes`），避免 iframe 内重复注入。
-- 面板通过浮动按钮或油猴扩展菜单打开，点击面板以外任意位置自动关闭。
+- 面板通过浮动按钮或油猴扩展菜单打开，点击面板以外任意位置或按 Esc 自动关闭。
 
 ## 安装
 

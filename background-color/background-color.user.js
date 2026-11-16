@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.4.0
+// @version      0.4.1
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -480,6 +480,13 @@
     if (panel.style.display !== 'block') return;
     if (panel.contains(e.target) || (CONFIG.FLOATING_BUTTON && fab.contains(e.target))) return;
     panel.style.display = 'none';
+  });
+
+  // 按 Esc 关闭面板（与点击面板外关闭等效）
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && panel.style.display === 'block') {
+      panel.style.display = 'none';
+    }
   });
 
   function init() {
