@@ -13,7 +13,7 @@
 
 ## 安装
 
-- GreasyFork 安装：脚本尚未发布，链接暂为占位（根目录 README），发布后更新。
+- GreasyFork 安装：[Auto Redirect（外链直达）](https://greasyfork.org/zh-CN/scripts/605804-auto-redirect-%E5%A4%96%E9%93%BE%E7%9B%B4%E8%BE%BE)。
 - 手动安装：安装本仓库 `auto-redirect/auto-redirect.user.js`，通用步骤见[根目录 README](../README.md)。
 
 ## 适用范围
