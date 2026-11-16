@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.4.1
+// @version      0.4.2
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -43,7 +43,6 @@
 
   const PANEL_ID = 'background-color-panel';
   const UI_STYLE_ID = 'background-color-ui-style';
-  const BG_STYLE_ID = 'background-color-style';
   const FAB_ID = 'background-color-fab';
 
   /* ----------------------------- 存取与工具 ----------------------------- */
@@ -104,20 +103,96 @@
 
   /* ----------------------------- 背景应用 ----------------------------- */
 
-  // 把当前颜色写入一条独立样式规则（html/body 加 !important，压过多数站点的普通背景声明）；
-  // color 为 null 时移除样式，恢复网页默认背景。
+  // 记录被脚本改动过内联样式的元素及原始 style 属性，恢复默认时按原样还原
+  const touchStyles = new Map(); // el -> 原始 style 属性字符串（null 表示原本没有内联样式）
+
+  function saveInline(el) {
+    if (!touchStyles.has(el)) touchStyles.set(el, el.getAttribute('style'));
+  }
+
+  function restoreInline(el) {
+    if (!touchStyles.has(el)) return;
+    const prev = touchStyles.get(el);
+    if (prev === null) el.removeAttribute('style');
+    else el.setAttribute('style', prev);
+    touchStyles.delete(el);
+  }
+
+  // 直接给 html / body 打内联 !important：优先级高于站点自身的 !important 规则
+  function paintBase(color) {
+    [document.documentElement, document.body].forEach((el) => {
+      if (!el) return;
+      saveInline(el);
+      el.style.setProperty('background-color', color, 'important');
+    });
+  }
+
+  // 元素是否铺满视口（整页背景层通常如此）；排除 fixed / sticky，避免动到弹窗遮罩与吸顶栏
+  function isCovering(el) {
+    const rect = el.getBoundingClientRect();
+    if (!window.innerWidth || !window.innerHeight) return false;
+    if (rect.width < window.innerWidth * 0.85 || rect.height < window.innerHeight * 0.85) return false;
+    const pos = getComputedStyle(el).position;
+    return pos !== 'fixed' && pos !== 'sticky';
+  }
+
+  // 元素自身是否画了可见背景（非全透明纯色，或有背景图）
+  function hasVisibleBackground(el) {
+    const style = getComputedStyle(el);
+    const bg = style.backgroundColor;
+    const solid = bg !== 'transparent' && !/,\s*0\)$/.test(bg);
+    return solid || style.backgroundImage !== 'none';
+  }
+
+  // 很多站点把背景画在铺满视口的布局容器（SPA 外壳、整页白色背景层）上，只改 html/body 会被盖住。
+  // 这里把这些容器置为透明，让 html 上的颜色透出来；卡片、正文等局部元素尺寸不够，不受影响。
+  // 从 body 逐层向下检查，限制层数与元素数，避免大页面扫描开销。
+  function clearCoveringBackgrounds() {
+    if (!currentColor || !document.body) return;
+    const queue = [{ el: document.body, depth: 0 }];
+    let visited = 0;
+    while (queue.length && visited < 400) {
+      const { el, depth } = queue.shift();
+      visited++;
+      if (el === panel || el === fab) continue;
+      if (isCovering(el) && hasVisibleBackground(el)) {
+        saveInline(el);
+        el.style.setProperty('background-color', 'transparent', 'important');
+        el.style.setProperty('background-image', 'none', 'important');
+      }
+      if (depth < 3) {
+        for (const child of el.children) queue.push({ el: child, depth: depth + 1 });
+      }
+    }
+  }
+
+  // 应用颜色；null 表示恢复网页默认背景（还原所有被改动的内联样式）
   function applyColor(color) {
-    let el = document.getElementById(BG_STYLE_ID);
     if (!color) {
-      if (el) el.remove();
+      for (const el of Array.from(touchStyles.keys())) restoreInline(el);
       return;
     }
-    if (!el) {
-      el = document.createElement('style');
-      el.id = BG_STYLE_ID;
-      (document.head || document.documentElement).appendChild(el);
+    paintBase(color);
+    clearCoveringBackgrounds();
+  }
+
+  // 站点异步渲染或 SPA 切换后布局容器可能变化，重新清理一次
+  function rescanBackground() {
+    if (currentColor) clearCoveringBackgrounds();
+  }
+
+  // 监听 SPA 路由变化，切换页面后重新清理
+  function watchRouteChange() {
+    window.addEventListener('popstate', rescanBackground);
+    window.addEventListener('hashchange', rescanBackground);
+    for (const method of ['pushState', 'replaceState']) {
+      const original = history[method];
+      history[method] = function (...args) {
+        const result = original.apply(this, args);
+        rescanBackground();
+        return result;
+      };
     }
-    el.textContent = `html, body { background-color: ${color} !important; }`;
   }
 
   // 应用并持久化某个颜色；null 表示恢复默认
@@ -499,6 +574,11 @@
       applySavedFabPos();
     }
     GM_registerMenuCommand('更换背景色', togglePanel);
+    // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
+    // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
+    watchRouteChange();
+    window.addEventListener('load', rescanBackground, { once: true });
+    setTimeout(rescanBackground, 1200);
   }
 
   if (document.readyState === 'loading') {
