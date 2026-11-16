@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.2.0
+// @version      0.3.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -256,12 +256,14 @@
     }
   }
 
-  // 生成一个色块按钮：点击应用颜色；isCustom 时悬停显示删除角标
+  // 生成一个色块按钮：点击应用颜色，再次点击当前生效颜色则取消；isCustom 时悬停显示删除角标
   function buildSwatch(hex, name, isCustom) {
+    const isActive = currentColor === hex;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'pbg-swatch' + (currentColor === hex ? ' is-active' : '');
-    btn.title = isCustom ? `${name}（点击应用，悬停可删除）` : `${name}（点击应用）`;
+    btn.className = 'pbg-swatch' + (isActive ? ' is-active' : '');
+    const baseTitle = isActive ? `${name}（当前生效，再次点击取消）` : `${name}（点击应用）`;
+    btn.title = isCustom ? `${baseTitle}，悬停可删除` : baseTitle;
 
     const chip = document.createElement('span');
     chip.className = 'pbg-chip';
@@ -271,7 +273,10 @@
     nameEl.textContent = name;
     btn.append(chip, nameEl);
 
-    btn.addEventListener('click', () => setCurrentColor(hex));
+    btn.addEventListener('click', () => {
+      // 切换语义：点击已生效的颜色等于取消，恢复网页默认背景
+      setCurrentColor(isActive ? null : hex);
+    });
 
     if (isCustom) {
       const del = document.createElement('span');
