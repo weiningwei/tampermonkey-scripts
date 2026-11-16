@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.4.2
+// @version      0.4.3
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
 // @author       weiningwei
 // @match        *://*/*
@@ -166,19 +166,147 @@
     }
   }
 
+  // 站点异步渲染或 SPA 切换后布局容器可能变化，重新清理一次
+  function rescanBackground() {
+    if (!currentColor) return;
+    clearCoveringBackgrounds();
+    clearLightBackgrounds(document.body);
+  }
+
+  // ---------- 浅色背景清理：内容卡片等局部元素 ----------
+
+  // 解析 computed background-color 文本（"rgb(r, g, b)" / "rgba(r, g, b, a)"）
+  function parseRgbColor(text) {
+    const m = typeof text === 'string'
+      ? text.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/)
+      : null;
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+  }
+
+  // 近白/浅色判定阈值：知乎等站的内容卡片（#fff、#f6f6f6 等）都在此之上
+  const LIGHT_THRESHOLD = 230;
+  // 表单控件保留原样，避免影响输入框与按钮的辨识度
+  const SKIPPED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'OPTION']);
+
+  function isLightBackground(colorText) {
+    const c = parseRgbColor(colorText);
+    if (!c || c.a < 0.5) return false; // 全透明或近乎透明的浅色无需处理
+    return c.r >= LIGHT_THRESHOLD && c.g >= LIGHT_THRESHOLD && c.b >= LIGHT_THRESHOLD;
+  }
+
+  // 解析单个颜色文本（rgb/rgba 或 #hex / #rgba），用于渐变停靠点
+  function parseColorToken(text) {
+    const c = parseRgbColor(text);
+    if (c) return c;
+    const m = typeof text === 'string' ? text.match(/^#([0-9a-f]{3,8})$/i) : null;
+    if (!m) return null;
+    let h = m[1];
+    if (h.length === 3 || h.length === 4) h = h.split('').map(ch => ch + ch).join('');
+    if (h.length < 6) return null;
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+      a: h.length >= 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
+    };
+  }
+
+  // 渐变是否整体为浅色：站点常用 linear-gradient(#fff, #f6f6f6) 当卡片背景，
+  // 此时 computed backgroundColor 是 transparent，单看颜色会漏掉，需按停靠点判断。
+  // 含 url() 的图片、无法解析的颜色关键字一律不处理，避免误伤深色渐变与图片。
+  function isLightGradient(imageText) {
+    if (!imageText || imageText === 'none' || /url\(/i.test(imageText)) return false;
+    const tokens = imageText.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/gi);
+    if (!tokens || !tokens.length) return false;
+    return tokens.every((t) => {
+      const c = parseColorToken(t);
+      return c && c.a >= 0.5
+        && c.r >= LIGHT_THRESHOLD && c.g >= LIGHT_THRESHOLD && c.b >= LIGHT_THRESHOLD;
+    });
+  }
+
+  // 单个元素：近白背景或浅色渐变置为透明，让 html 上的颜色透出来
+  // （幂等：清过的元素 computed 变透明后自然跳过）
+  function clearLightBackground(el) {
+    if (el.nodeType !== 1) return;
+    if (el === panel || panel.contains(el) || el === fab || fab.contains(el)) return;
+    if (SKIPPED_TAGS.has(el.tagName)) return;
+    const style = getComputedStyle(el);
+    if (style.position === 'fixed') return; // 弹窗、遮罩等覆盖层不动
+    const lightColor = isLightBackground(style.backgroundColor);
+    const lightGradient = isLightGradient(style.backgroundImage);
+    if (!lightColor && !lightGradient) return;
+    saveInline(el);
+    el.style.setProperty('background-color', 'transparent', 'important');
+    if (lightGradient) el.style.setProperty('background-image', 'none', 'important');
+  }
+
+  // 对一棵子树逐元素清浅色背景；初始全量扫 body，动态新增时只扫新节点，控制开销
+  function clearLightBackgrounds(root) {
+    if (!root || !document.body) return;
+    const elements = root === document.body
+      ? document.body.querySelectorAll('*')
+      : [root, ...root.querySelectorAll('*')];
+    let count = 0;
+    for (const el of elements) {
+      if (count++ > 8000) break;
+      clearLightBackground(el);
+    }
+  }
+
+  // 动态内容（信息流无限滚动等）新增节点后，去抖 200ms 补一次浅色清理
+  let lightObserver = null;
+  let pendingNodes = new Set();
+  let pendingScanTimer = null;
+
+  function scheduleLightScan(node) {
+    pendingNodes.add(node);
+    if (pendingScanTimer) clearTimeout(pendingScanTimer);
+    pendingScanTimer = setTimeout(() => {
+      pendingScanTimer = null;
+      const nodes = Array.from(pendingNodes);
+      pendingNodes = new Set();
+      for (const n of nodes) clearLightBackgrounds(n);
+    }, 200);
+  }
+
+  function startLightObserver() {
+    if (lightObserver || !document.body) return;
+    lightObserver = new MutationObserver((mutations) => {
+      if (!currentColor) return;
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType === 1) scheduleLightScan(node);
+        }
+      }
+    });
+    lightObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function stopLightObserver() {
+    if (lightObserver) {
+      lightObserver.disconnect();
+      lightObserver = null;
+    }
+    if (pendingScanTimer) {
+      clearTimeout(pendingScanTimer);
+      pendingScanTimer = null;
+    }
+    pendingNodes = new Set();
+  }
+
   // 应用颜色；null 表示恢复网页默认背景（还原所有被改动的内联样式）
   function applyColor(color) {
     if (!color) {
       for (const el of Array.from(touchStyles.keys())) restoreInline(el);
+      stopLightObserver();
       return;
     }
     paintBase(color);
     clearCoveringBackgrounds();
-  }
-
-  // 站点异步渲染或 SPA 切换后布局容器可能变化，重新清理一次
-  function rescanBackground() {
-    if (currentColor) clearCoveringBackgrounds();
+    clearLightBackgrounds(document.body);
+    startLightObserver();
   }
 
   // 监听 SPA 路由变化，切换页面后重新清理

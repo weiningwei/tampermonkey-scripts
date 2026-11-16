@@ -4,6 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.3] - 2026-11-16
+
+### Fixed
+
+- 修复知乎等内容站仍有大片白色区域的问题：0.4.2 只清铺满视口的容器，而白/浅灰信息流卡片、侧栏宽度不足视口，仍会盖住底色。现在把所有近白背景元素（RGB 各通道 ≥ 230）一并置为透明，并用 MutationObserver 处理无限滚动等动态插入的内容。
+- 浅色渐变卡片（`background: linear-gradient(#fff, #f6f6f6)`，computed 颜色为 transparent）此前会漏掉，现按渐变停靠点判断后一并清理。
+
+### Changed
+
+- 深色卡片、深色渐变、彩色按钮、输入框、`position: fixed` 弹窗遮罩保留原样，避免破坏可读性与交互。
+
 ## [0.4.2] - 2026-11-16
 
 ### Fixed
