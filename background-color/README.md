@@ -15,7 +15,7 @@
 
 ## 安装
 
-- GreasyFork 安装：脚本尚未发布，链接暂为占位（根目录 README），发布后更新。
+- GreasyFork 安装：[Background Color（网页背景色自定义）](https://greasyfork.org/zh-CN/scripts/605797-background-color-%E7%BD%91%E9%A1%B5%E8%83%8C%E6%99%AF%E8%89%B2%E8%87%AA%E5%AE%9A%E4%B9%89)。
 - 手动安装：安装本仓库 `background-color/background-color.user.js`，通用步骤见[根目录 README](../README.md)。
 
 ## 适用范围
