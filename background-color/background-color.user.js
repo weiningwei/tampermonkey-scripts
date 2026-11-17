@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.5.0
+// @version      0.5.1
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置。
 // @author       weiningwei
 // @match        *://*/*
@@ -682,14 +682,38 @@
     }
   }, true);
 
-  // 打开/关闭面板（浮动按钮 / 油猴扩展菜单共用）
-  function togglePanel() {
+  const PANEL_EDGE_GAP = 8;
+
+  // 油猴菜单入口：面板在视口顶部居中显示
+  function centerPanel() {
+    panel.style.transform = 'translateX(-50%)';
+    panel.style.left = '50%';
+    panel.style.top = '72px';
+  }
+
+  // 浮动按钮入口：面板贴在按钮上方，右边缘与按钮对齐；上方空间不足时翻到按钮下方
+  function positionPanelAboveFab() {
+    const rect = fab.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    const left = Math.max(PANEL_EDGE_GAP, Math.min(rect.right - width, window.innerWidth - width - PANEL_EDGE_GAP));
+    let top = rect.top - height - PANEL_EDGE_GAP;
+    if (top < PANEL_EDGE_GAP) top = Math.min(rect.bottom + PANEL_EDGE_GAP, window.innerHeight - height - PANEL_EDGE_GAP);
+    panel.style.transform = 'none';
+    panel.style.left = left + 'px';
+    panel.style.top = Math.max(PANEL_EDGE_GAP, top) + 'px';
+  }
+
+  // 打开/关闭面板（浮动按钮 / 油猴扩展菜单共用）；anchor 为 'fab' 时贴着按钮弹出
+  function togglePanel(anchor) {
     const show = panel.style.display === 'none';
     panel.style.display = show ? 'block' : 'none';
-    if (show) {
-      renderPalette();
-      syncPreview();
-    }
+    if (!show) return;
+    renderPalette();
+    syncPreview();
+    // 色板内容会影响面板高度，需在渲染后再测量定位
+    if (anchor === 'fab') positionPanelAboveFab();
+    else centerPanel();
   }
 
   // 重置全部设置：恢复网页默认背景，并清空当前颜色、自定义颜色与浮动按钮位置
@@ -710,7 +734,7 @@
   resetAllBtn.addEventListener('click', resetAllSettings);
 
   // 点击浮动按钮开/关面板（拖动结束后的 click 已被上面的抑制器拦截）
-  fab.addEventListener('click', togglePanel);
+  fab.addEventListener('click', () => togglePanel('fab'));
 
   // 点击面板与浮动按钮以外的任意位置，自动关闭面板（符合常见弹层习惯）
   document.addEventListener('pointerdown', (e) => {
@@ -735,7 +759,7 @@
       document.body.appendChild(fab);
       applySavedFabPos();
     }
-    GM_registerMenuCommand('更换背景色', togglePanel);
+    GM_registerMenuCommand('更换背景色', () => togglePanel('menu'));
     // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
     // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
     watchRouteChange();
