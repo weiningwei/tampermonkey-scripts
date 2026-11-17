@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.7.0
+// @version      0.7.1
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -247,6 +247,9 @@
   // （幂等：清过的元素 computed 变透明后自然跳过）
   function clearLightBackground(el) {
     if (el.nodeType !== 1) return;
+    // 已是脚本写入的 transparent !important（内联读取不触发样式计算），无需再读计算样式
+    if (el.style.getPropertyValue('background-color') === 'transparent'
+      && el.style.getPropertyPriority('background-color') === 'important') return;
     if (el === panel || panel.contains(el) || el === fab || fab.contains(el)) return;
     if (SKIPPED_TAGS.has(el.tagName)) return;
     const style = getComputedStyle(el);

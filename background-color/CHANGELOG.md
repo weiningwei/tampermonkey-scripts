@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.1] - 2026-11-17
+
+### Changed
+
+- 浅色清理跳过已经处理过的元素：元素内联背景已是脚本写入的 `transparent !important` 时直接返回，不再调用 `getComputedStyle`。全量重扫不再重复计算这些元素，卡片较多的页面样式读取量约减半。
+
 ## [0.7.0] - 2026-11-17
 
 ### Changed
