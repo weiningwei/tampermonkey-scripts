@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.5.1
-// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置。
+// @version      0.6.0
+// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
@@ -40,10 +40,12 @@
   const STORAGE_COLOR_KEY = 'background-color.color'; // 当前生效颜色（#rrggbb 或 null 表示默认）
   const STORAGE_CUSTOM_KEY = 'background-color.customColors'; // 自定义颜色列表（#rrggbb 数组）
   const FAB_POS_KEY = 'background-color.fabPos'; // 浮动按钮拖动后的位置（右下锚定）
+  const STORAGE_WHITELIST_KEY = 'background-color.whitelist'; // 站点白名单（hostname 数组，不含 path）
 
   const PANEL_ID = 'background-color-panel';
   const UI_STYLE_ID = 'background-color-ui-style';
   const FAB_ID = 'background-color-fab';
+  const PICK_HIGHLIGHT_ID = 'background-color-pick';
 
   /* ----------------------------- 存取与工具 ----------------------------- */
 
@@ -85,8 +87,23 @@
     GM_setValue(STORAGE_CUSTOM_KEY, list);
   }
 
+  function loadWhitelist() {
+    const v = GM_getValue(STORAGE_WHITELIST_KEY, []);
+    return Array.isArray(v)
+      ? v.filter(h => typeof h === 'string' && h.trim()).map(h => h.trim().toLowerCase())
+      : [];
+  }
+
+  function saveWhitelist(list) {
+    GM_setValue(STORAGE_WHITELIST_KEY, list);
+  }
+
   let currentColor = loadCurrentColor();
   let customColors = loadCustomColors();
+  let whitelist = loadWhitelist();
+  // 白名单只比对 hostname：同一域名下所有 path 一起生效/停用
+  const currentHost = (location.hostname || '').toLowerCase();
+  const isCurrentHostWhitelisted = () => whitelist.includes(currentHost);
 
   // 读取 R/G/B 三个输入框：全部为 0~255 整数时返回 { ok: true, rgb }，否则 ok: false
   function readRgbInputs(inputs) {
@@ -325,6 +342,11 @@
 
   // 应用并持久化某个颜色；null 表示恢复默认
   function setCurrentColor(hex) {
+    // 白名单站点不参与上色，避免「已停用」后又被面板点回生效
+    if (hex && isCurrentHostWhitelisted()) {
+      alert('当前站点已在白名单中，不会应用背景色。如需启用，请先点击「移出白名单」。');
+      return;
+    }
     currentColor = hex;
     saveCurrentColor(hex);
     applyColor(hex);
@@ -359,6 +381,14 @@
 #${PANEL_ID} .pbg-hint { color:#999; font-size:11px; line-height:1.4; }
 #${PANEL_ID} .pbg-reset-all { padding:4px 10px; color:#d93025; background:#fff; border:1px solid #d93025; border-radius:4px; cursor:pointer; flex-shrink:0; }
 #${PANEL_ID} .pbg-reset-all:hover { background:#fce8e6; }
+#${PANEL_ID} .pbg-site-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
+#${PANEL_ID} .pbg-host { flex:1; min-width:0; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#${PANEL_ID} .pbg-site-btn { padding:4px 10px; color:#1a73e8; background:#fff; border:1px solid #1a73e8; border-radius:4px; cursor:pointer; flex-shrink:0; }
+#${PANEL_ID} .pbg-site-btn:disabled { color:#aaa; border-color:#ddd; cursor:default; }
+#${PANEL_ID} .pbg-site-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+#${PANEL_ID} .pbg-site-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 6px; background:#f5f5f5; border-radius:4px; font-size:11px; color:#555; }
+#${PANEL_ID} .pbg-site-chip button { width:14px; height:14px; padding:0; line-height:12px; font-size:12px; text-align:center; color:#d93025; background:none; border:none; border-radius:50%; cursor:pointer; }
+#${PICK_HIGHLIGHT_ID} { position:fixed; z-index:2147483646; display:none; pointer-events:none; box-sizing:border-box; border:2px solid #1a73e8; background:rgba(26,115,232,.08); border-radius:2px; }
 #${FAB_ID} { position:fixed; right:16px; bottom:16px; z-index:2147483646; width:38px; height:38px; line-height:38px; padding:0; text-align:center; font-size:18px; color:#fff; background:#1a73e8; border:none; border-radius:50%; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); user-select:none; touch-action:none; }
 #${FAB_ID}:hover { background:#1765cc; }
 `;
@@ -448,6 +478,37 @@
 
   formSection.append(formLabel, formRow, previewRow);
 
+  // 当前站点区：按 hostname 加入/移出白名单（忽略 path），以及选取页面元素并复制信息
+  const siteSection = document.createElement('div');
+  siteSection.className = 'pbg-section';
+  const siteLabel = document.createElement('div');
+  siteLabel.textContent = '当前站点';
+  siteLabel.className = 'pbg-label';
+  const siteRow = document.createElement('div');
+  siteRow.className = 'pbg-site-row';
+  const siteHost = document.createElement('span');
+  siteHost.className = 'pbg-host';
+  siteHost.textContent = currentHost || '（当前页面没有域名）';
+  siteHost.title = currentHost;
+  const wlBtn = document.createElement('button');
+  wlBtn.type = 'button';
+  wlBtn.className = 'pbg-site-btn';
+  siteRow.append(siteHost, wlBtn);
+
+  const copyRow = document.createElement('div');
+  copyRow.className = 'pbg-site-row';
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.textContent = '复制页面元素';
+  copyBtn.title = '进入选取模式：点击页面上效果异常的元素，复制其选择器、尺寸、计算样式与 HTML 片段';
+  copyBtn.className = 'pbg-site-btn';
+  copyRow.appendChild(copyBtn);
+
+  const siteList = document.createElement('div');
+  siteList.className = 'pbg-site-list';
+
+  siteSection.append(siteLabel, siteRow, copyRow, siteList);
+
   // 面板底部：区分「恢复默认」（只取消当前颜色）与「重置全部设置」（清空全部已保存的配置）
   const footer = document.createElement('div');
   footer.className = 'pbg-footer';
@@ -461,7 +522,7 @@
   resetAllBtn.className = 'pbg-reset-all';
   footer.append(footerHint, resetAllBtn);
 
-  panel.append(header, presetSection, customSection, formSection, footer);
+  panel.append(header, presetSection, customSection, formSection, siteSection, footer);
 
   // 渲染色板：预设 + 自定义两行网格，当前生效颜色高亮
   function renderPalette() {
@@ -480,6 +541,32 @@
       for (const hex of customColors) {
         customGrid.appendChild(buildSwatch(hex, hex, true));
       }
+    }
+  }
+
+  // 渲染当前站点区：白名单按钮文案 + 已加入白名单的域名列表
+  function renderSiteSection() {
+    const listed = isCurrentHostWhitelisted();
+    wlBtn.textContent = listed ? '移出白名单' : '加入白名单';
+    wlBtn.disabled = !currentHost;
+    wlBtn.title = listed
+      ? '把本页站点从白名单移除，并立即恢复背景色设置'
+      : '本页转换效果不好时加入白名单：当前页立即停用，之后该域名下（任意 path）都不再加载脚本';
+
+    siteList.textContent = '';
+    siteList.style.display = whitelist.length ? 'flex' : 'none';
+    for (const host of whitelist) {
+      const chip = document.createElement('span');
+      chip.className = 'pbg-site-chip';
+      const chipText = document.createElement('span');
+      chipText.textContent = host;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '×';
+      del.title = '从白名单移除 ' + host;
+      del.addEventListener('click', () => removeHostFromWhitelist(host));
+      chip.append(chipText, del);
+      siteList.appendChild(chip);
     }
   }
 
@@ -693,6 +780,11 @@
 
   // 浮动按钮入口：面板贴在按钮上方，右边缘与按钮对齐；上方空间不足时翻到按钮下方
   function positionPanelAboveFab() {
+    // 浮动按钮被白名单隐藏时没有可锚定的位置，退回居中显示
+    if (!fab.isConnected || !fab.offsetWidth) {
+      centerPanel();
+      return;
+    }
     const rect = fab.getBoundingClientRect();
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
@@ -704,24 +796,227 @@
     panel.style.top = Math.max(PANEL_EDGE_GAP, top) + 'px';
   }
 
+  let lastPanelAnchor = 'menu';
+
   // 打开/关闭面板（浮动按钮 / 油猴扩展菜单共用）；anchor 为 'fab' 时贴着按钮弹出
   function togglePanel(anchor) {
     const show = panel.style.display === 'none';
+    if (show && anchor) lastPanelAnchor = anchor;
     panel.style.display = show ? 'block' : 'none';
     if (!show) return;
     renderPalette();
     syncPreview();
-    // 色板内容会影响面板高度，需在渲染后再测量定位
-    if (anchor === 'fab') positionPanelAboveFab();
+    renderSiteSection();
+    // 色板与白名单列表会影响面板高度，需在渲染后再测量定位
+    if (lastPanelAnchor === 'fab') positionPanelAboveFab();
     else centerPanel();
+  }
+
+  /* ----------------------------- 站点白名单 ----------------------------- */
+
+  // 显示/隐藏浮动按钮；白名单停用时隐藏，重新启用时挂回页面并恢复位置
+  function setFabVisible(visible) {
+    if (!CONFIG.FLOATING_BUTTON) return;
+    fab.style.display = visible ? '' : 'none';
+    if (visible && !fab.isConnected) {
+      document.body.appendChild(fab);
+      applySavedFabPos();
+    }
+  }
+
+  // 加入白名单：本页立即停用，刷新后该域名下脚本完全不加载
+  function addCurrentHostToWhitelist() {
+    if (!currentHost || isCurrentHostWhitelisted()) return;
+    whitelist.push(currentHost);
+    saveWhitelist(whitelist);
+    applyColor(null); // 立即还原被脚本改动过的样式
+    setFabVisible(false);
+    renderSiteSection();
+    alert(currentHost + ' 已加入白名单：本页背景已还原，刷新后该域名下不再加载脚本。');
+  }
+
+  // 移出白名单：若命中的是当前站点，立刻恢复生效，无需刷新
+  function removeHostFromWhitelist(host) {
+    whitelist = whitelist.filter(h => h !== host);
+    saveWhitelist(whitelist);
+    if (host === currentHost) {
+      applyColor(currentColor);
+      setFabVisible(true);
+    }
+    renderSiteSection();
+  }
+
+  wlBtn.addEventListener('click', () => {
+    if (isCurrentHostWhitelisted()) removeHostFromWhitelist(currentHost);
+    else addCurrentHostToWhitelist();
+  });
+
+  /* ----------------------------- 选取元素并复制 ----------------------------- */
+
+  let pickActive = false;
+  const pickHighlight = document.createElement('div');
+  pickHighlight.id = PICK_HIGHLIGHT_ID;
+
+  // 取光标下最上层的元素，跳过脚本自己的面板、浮动按钮与高亮框
+  function pickableElementAt(x, y) {
+    const stack = typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(x, y)
+      : [document.elementFromPoint(x, y)];
+    for (const el of stack) {
+      if (!el || el === pickHighlight || el === panel || panel.contains(el) || el === fab || fab.contains(el)) continue;
+      return el;
+    }
+    return null;
+  }
+
+  function highlightElement(el) {
+    if (!el) {
+      pickHighlight.style.display = 'none';
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    pickHighlight.style.display = 'block';
+    pickHighlight.style.left = rect.left + 'px';
+    pickHighlight.style.top = rect.top + 'px';
+    pickHighlight.style.width = rect.width + 'px';
+    pickHighlight.style.height = rect.height + 'px';
+  }
+
+  function onPickMove(e) {
+    highlightElement(pickableElementAt(e.clientX, e.clientY));
+  }
+
+  function onPickClick(e) {
+    if (panel.contains(e.target) || fab.contains(e.target)) return; // 放行脚本自身 UI 的点击
+    e.preventDefault();
+    e.stopPropagation();
+    const el = pickableElementAt(e.clientX, e.clientY);
+    stopPickMode();
+    if (!el) {
+      togglePanel(lastPanelAnchor);
+      return;
+    }
+    copyElementReport(el);
+  }
+
+  function onPickKeyDown(e) {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    stopPickMode();
+    togglePanel(lastPanelAnchor);
+  }
+
+  // 进入选取模式：收起面板，鼠标移动时高亮元素，点击即复制
+  function startPickMode() {
+    if (pickActive) return;
+    pickActive = true;
+    panel.style.display = 'none';
+    if (!pickHighlight.isConnected) document.body.appendChild(pickHighlight);
+    highlightElement(null);
+    document.addEventListener('pointermove', onPickMove, true);
+    document.addEventListener('click', onPickClick, true);
+    document.addEventListener('keydown', onPickKeyDown, true);
+  }
+
+  function stopPickMode() {
+    pickActive = false;
+    highlightElement(null);
+    document.removeEventListener('pointermove', onPickMove, true);
+    document.removeEventListener('click', onPickClick, true);
+    document.removeEventListener('keydown', onPickKeyDown, true);
+  }
+
+  copyBtn.addEventListener('click', startPickMode);
+
+  // 类名转义：CSS.escape 不可用时退回手写转义
+  function escapeIdent(text) {
+    if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(text);
+    return text.replace(/[^\w-]/g, '\\$&');
+  }
+
+  // 生成指向该元素的选择器：优先以 id 收尾，最多 6 层，同标签兄弟节点补 nth-of-type
+  function buildSelector(el) {
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && node !== document.documentElement) {
+      let part = node.tagName.toLowerCase();
+      if (node.id) {
+        parts.unshift(part + '#' + escapeIdent(node.id));
+        break;
+      }
+      const classes = Array.from(node.classList).slice(0, 3);
+      if (classes.length) part += '.' + classes.map(escapeIdent).join('.');
+      const parent = node.parentElement;
+      if (parent) {
+        const sameTag = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+        if (sameTag.length > 1) part += ':nth-of-type(' + (sameTag.indexOf(node) + 1) + ')';
+      }
+      parts.unshift(part);
+      node = parent;
+      if (parts.length >= 6) break;
+    }
+    return parts.join(' > ') || el.tagName.toLowerCase();
+  }
+
+  // 汇总定位问题所需的信息：选择器、尺寸、计算背景样式与 HTML 片段
+  function buildElementReport(el) {
+    const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const html = (el.outerHTML || '').replace(/\s+/g, ' ').slice(0, 600);
+    return [
+      '【背景色脚本 · 页面元素信息】',
+      '页面：' + location.href,
+      '选择器：' + buildSelector(el),
+      '标签：' + el.tagName,
+      'class：' + (typeof el.className === 'string' && el.className ? el.className : '（无）'),
+      '尺寸：' + Math.round(rect.width) + '×' + Math.round(rect.height) + '（视口 ' + window.innerWidth + '×' + window.innerHeight + '）',
+      '定位：position ' + style.position + ' / display ' + style.display,
+      '背景色：' + style.backgroundColor,
+      '背景图：' + style.backgroundImage,
+      'HTML：' + html,
+    ].join('\n');
+  }
+
+  // 写剪贴板：优先 Clipboard API，被权限或非安全上下文拦截时退回临时 textarea
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* 退回到 execCommand */ }
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    area.remove();
+    return ok;
+  }
+
+  async function copyElementReport(el) {
+    const report = buildElementReport(el);
+    const ok = await copyText(report);
+    if (ok) {
+      alert('已复制元素信息，可直接粘贴用于反馈。');
+    } else {
+      console.log(report);
+      alert('复制失败，元素信息已输出到控制台（F12 → Console）。');
+    }
+    togglePanel(lastPanelAnchor);
   }
 
   // 重置全部设置：恢复网页默认背景，并清空当前颜色、自定义颜色与浮动按钮位置
   function resetAllSettings() {
-    const confirmed = confirm('重置全部设置会恢复网页默认背景、删除所有自定义颜色，并把浮动按钮位置还原。此操作不可撤销，确定继续？');
+    const confirmed = confirm('重置全部设置会恢复网页默认背景、删除所有自定义颜色、清空站点白名单并还原浮动按钮位置。此操作不可撤销，确定继续？');
     if (!confirmed) return;
     customColors = [];
     saveCustomColors(customColors);
+    whitelist = [];
+    saveWhitelist(whitelist);
     GM_setValue(FAB_POS_KEY, null);
     // 清掉 setFabPos 写入的内联定位，浮动按钮回到样式表里的默认位置
     ['right', 'bottom', 'left', 'top'].forEach((prop) => fab.style.removeProperty(prop));
@@ -729,6 +1024,8 @@
     hexInput.value = '';
     setCurrentColor(null); // 内部会还原内联样式并重渲色板
     syncPreview();
+    setFabVisible(true);
+    renderSiteSection();
   }
 
   resetAllBtn.addEventListener('click', resetAllSettings);
@@ -753,18 +1050,18 @@
   function init() {
     if (!document.body) return;
     injectUiStyles();
-    applyColor(currentColor);
     document.body.appendChild(panel);
-    if (CONFIG.FLOATING_BUTTON) {
-      document.body.appendChild(fab);
-      applySavedFabPos();
+    // 白名单站点：不上色、不显示浮动按钮、不挂观察器；仅保留菜单入口，便于在此页移出白名单
+    if (!isCurrentHostWhitelisted()) {
+      applyColor(currentColor);
+      setFabVisible(true);
+      // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
+      // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
+      watchRouteChange();
+      window.addEventListener('load', rescanBackground, { once: true });
+      setTimeout(rescanBackground, 1200);
     }
     GM_registerMenuCommand('更换背景色', () => togglePanel('menu'));
-    // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
-    // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
-    watchRouteChange();
-    window.addEventListener('load', rescanBackground, { once: true });
-    setTimeout(rescanBackground, 1200);
   }
 
   if (document.readyState === 'loading') {
