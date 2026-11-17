@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.6.1
+// @version      0.7.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -359,12 +359,12 @@
 #${PANEL_ID} { position:fixed; top:72px; left:50%; transform:translateX(-50%); z-index:2147483647; width:320px; padding:12px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.2); color:#333; font-size:13px; display:none; }
 #${PANEL_ID} .pbg-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
 #${PANEL_ID} .pbg-title { font-weight:bold; }
-#${PANEL_ID} .pbg-reset { padding:2px 8px; color:#1a73e8; background:none; border:1px solid #1a73e8; border-radius:4px; cursor:pointer; }
 #${PANEL_ID} .pbg-section { margin-top:10px; }
 #${PANEL_ID} .pbg-label { color:#555; font-weight:bold; margin-bottom:6px; }
 #${PANEL_ID} .pbg-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
 #${PANEL_ID} .pbg-swatch { position:relative; padding:0; border:none; background:none; cursor:pointer; }
 #${PANEL_ID} .pbg-chip { display:block; width:100%; height:34px; border-radius:6px; border:2px solid transparent; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); box-sizing:border-box; }
+#${PANEL_ID} .pbg-chip-default { background:#fff linear-gradient(to top right, transparent 46%, #d93025 46%, #d93025 54%, transparent 54%); }
 #${PANEL_ID} .pbg-swatch.is-active .pbg-chip { border-color:#1a73e8; }
 #${PANEL_ID} .pbg-name { display:block; margin-top:2px; font-size:11px; color:#666; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #${PANEL_ID} .pbg-del { position:absolute; top:-7px; right:-7px; width:16px; height:16px; padding:0; line-height:13px; font-size:11px; text-align:center; color:#d93025; background:#fff; border:1px solid #d93025; border-radius:50%; cursor:pointer; display:none; }
@@ -410,12 +410,7 @@
   const title = document.createElement('span');
   title.textContent = '背景色设置';
   title.className = 'pbg-title';
-  const resetBtn = document.createElement('button');
-  resetBtn.type = 'button';
-  resetBtn.textContent = '恢复默认';
-  resetBtn.title = '仅取消当前背景色并还原网页默认背景，保留自定义颜色与浮动按钮位置';
-  resetBtn.className = 'pbg-reset';
-  header.append(title, resetBtn);
+  header.append(title);
 
   // 预设颜色区
   const presetSection = document.createElement('div');
@@ -514,7 +509,7 @@
   footer.className = 'pbg-footer';
   const footerHint = document.createElement('span');
   footerHint.className = 'pbg-hint';
-  footerHint.textContent = '「恢复默认」只取消当前颜色';
+  footerHint.textContent = '「默认」只取消背景色转换';
   const resetAllBtn = document.createElement('button');
   resetAllBtn.type = 'button';
   resetAllBtn.textContent = '重置全部设置';
@@ -527,6 +522,7 @@
   // 渲染色板：预设 + 自定义两行网格，当前生效颜色高亮
   function renderPalette() {
     presetGrid.textContent = '';
+    presetGrid.appendChild(buildDefaultSwatch());
     for (const preset of CONFIG.PRESETS) {
       presetGrid.appendChild(buildSwatch(rgbToHex(preset.rgb), preset.name, false));
     }
@@ -568,6 +564,26 @@
       chip.append(chipText, del);
       siteList.appendChild(chip);
     }
+  }
+
+  // 「默认」色块：代表不转换网页背景，选中即还原网页原始背景（替代原来的「恢复默认」按钮）
+  function buildDefaultSwatch() {
+    const isActive = currentColor === null;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pbg-swatch' + (isActive ? ' is-active' : '');
+    btn.title = isActive ? '网页默认背景（当前生效，不做任何转换）' : '取消背景色转换，恢复网页默认背景';
+    const chip = document.createElement('span');
+    chip.className = 'pbg-chip pbg-chip-default';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'pbg-name';
+    nameEl.textContent = '默认';
+    btn.append(chip, nameEl);
+    btn.addEventListener('click', () => {
+      if (currentColor === null) return; // 已经是默认状态，无需重复处理
+      setCurrentColor(null);
+    });
+    return btn;
   }
 
   // 生成一个色块按钮：点击应用颜色，再次点击当前生效颜色则取消；isCustom 时悬停显示删除角标
@@ -685,8 +701,6 @@
   hexInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addCustomColor();
   });
-
-  resetBtn.addEventListener('click', () => setCurrentColor(null));
 
   /* ----------------------------- 浮动按钮 ----------------------------- */
 
