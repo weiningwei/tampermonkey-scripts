@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.4.3
-// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景。
+// @version      0.5.0
+// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
@@ -355,6 +355,10 @@
 #${PANEL_ID} .pbg-preview-chip { width:32px; height:32px; border-radius:6px; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
 #${PANEL_ID} .pbg-hex { color:#666; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #${PANEL_ID} .pbg-add { margin-left:auto; padding:6px 12px; color:#fff; background:#1a73e8; border:none; border-radius:4px; cursor:pointer; flex-shrink:0; }
+#${PANEL_ID} .pbg-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid #eee; }
+#${PANEL_ID} .pbg-hint { color:#999; font-size:11px; line-height:1.4; }
+#${PANEL_ID} .pbg-reset-all { padding:4px 10px; color:#d93025; background:#fff; border:1px solid #d93025; border-radius:4px; cursor:pointer; flex-shrink:0; }
+#${PANEL_ID} .pbg-reset-all:hover { background:#fce8e6; }
 #${FAB_ID} { position:fixed; right:16px; bottom:16px; z-index:2147483646; width:38px; height:38px; line-height:38px; padding:0; text-align:center; font-size:18px; color:#fff; background:#1a73e8; border:none; border-radius:50%; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); user-select:none; touch-action:none; }
 #${FAB_ID}:hover { background:#1765cc; }
 `;
@@ -379,7 +383,7 @@
   const resetBtn = document.createElement('button');
   resetBtn.type = 'button';
   resetBtn.textContent = '恢复默认';
-  resetBtn.title = '移除背景色覆盖，恢复网页默认背景';
+  resetBtn.title = '仅取消当前背景色并还原网页默认背景，保留自定义颜色与浮动按钮位置';
   resetBtn.className = 'pbg-reset';
   header.append(title, resetBtn);
 
@@ -444,7 +448,20 @@
 
   formSection.append(formLabel, formRow, previewRow);
 
-  panel.append(header, presetSection, customSection, formSection);
+  // 面板底部：区分「恢复默认」（只取消当前颜色）与「重置全部设置」（清空全部已保存的配置）
+  const footer = document.createElement('div');
+  footer.className = 'pbg-footer';
+  const footerHint = document.createElement('span');
+  footerHint.className = 'pbg-hint';
+  footerHint.textContent = '「恢复默认」只取消当前颜色';
+  const resetAllBtn = document.createElement('button');
+  resetAllBtn.type = 'button';
+  resetAllBtn.textContent = '重置全部设置';
+  resetAllBtn.title = '恢复网页默认背景，并清除所有自定义颜色与浮动按钮位置（不可撤销）';
+  resetAllBtn.className = 'pbg-reset-all';
+  footer.append(footerHint, resetAllBtn);
+
+  panel.append(header, presetSection, customSection, formSection, footer);
 
   // 渲染色板：预设 + 自定义两行网格，当前生效颜色高亮
   function renderPalette() {
@@ -674,6 +691,23 @@
       syncPreview();
     }
   }
+
+  // 重置全部设置：恢复网页默认背景，并清空当前颜色、自定义颜色与浮动按钮位置
+  function resetAllSettings() {
+    const confirmed = confirm('重置全部设置会恢复网页默认背景、删除所有自定义颜色，并把浮动按钮位置还原。此操作不可撤销，确定继续？');
+    if (!confirmed) return;
+    customColors = [];
+    saveCustomColors(customColors);
+    GM_setValue(FAB_POS_KEY, null);
+    // 清掉 setFabPos 写入的内联定位，浮动按钮回到样式表里的默认位置
+    ['right', 'bottom', 'left', 'top'].forEach((prop) => fab.style.removeProperty(prop));
+    channelInputs.forEach((input) => { input.value = ''; });
+    hexInput.value = '';
+    setCurrentColor(null); // 内部会还原内联样式并重渲色板
+    syncPreview();
+  }
+
+  resetAllBtn.addEventListener('click', resetAllSettings);
 
   // 点击浮动按钮开/关面板（拖动结束后的 click 已被上面的抑制器拦截）
   fab.addEventListener('click', togglePanel);
