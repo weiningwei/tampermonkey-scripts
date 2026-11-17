@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.7.2
+// @version      0.7.3
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -341,15 +341,29 @@
     startLightObserver();
   }
 
+  // 路由切换统一去抖：SPA 常在极短时间内连续调用 pushState / replaceState，
+  // 在导航调用栈里同步跑全量扫描会拖慢切页，这里合并成一次重扫
+  const ROUTE_RESCAN_DELAY = 200;
+  let routeScanTimer = null;
+
+  function scheduleRouteRescan() {
+    domDirty = true; // 路由可能只改了 URL，先给一次强制重扫的机会
+    if (routeScanTimer) clearTimeout(routeScanTimer);
+    routeScanTimer = setTimeout(() => {
+      routeScanTimer = null;
+      rescanBackground(true);
+    }, ROUTE_RESCAN_DELAY);
+  }
+
   // 监听 SPA 路由变化，切换页面后重新清理
   function watchRouteChange() {
-    window.addEventListener('popstate', () => rescanBackground(true));
-    window.addEventListener('hashchange', () => rescanBackground(true));
+    window.addEventListener('popstate', scheduleRouteRescan);
+    window.addEventListener('hashchange', scheduleRouteRescan);
     for (const method of ['pushState', 'replaceState']) {
       const original = history[method];
       history[method] = function (...args) {
         const result = original.apply(this, args);
-        rescanBackground(true);
+        scheduleRouteRescan();
         return result;
       };
     }

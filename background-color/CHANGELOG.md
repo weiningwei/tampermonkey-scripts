@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.3] - 2026-11-17
+
+### Changed
+
+- SPA 路由变化（`pushState` / `replaceState` / `popstate` / `hashchange`）的重扫改为 200ms 去抖：不再在路由调用的同步栈里跑全量扫描，连续导航只扫一次，避免切换页面时卡顿。
+
 ## [0.7.2] - 2026-11-17
 
 ### Changed
