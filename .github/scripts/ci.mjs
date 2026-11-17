@@ -68,6 +68,38 @@ function metadata(source) {
   return { fields, body: source.slice(block.index + block[0].length) };
 }
 
+// 根 README 脚本总览表：解析「脚本 / 版本」两列，供版本一致性与安装链接检查复用
+const tableCells = (line) => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(cell => cell.trim());
+
+export function readmeScriptVersions(readme) {
+  const lines = readme.split(/\r?\n/);
+  const headerIndex = lines.findIndex(line => /^\|\s*脚本\s*\|/.test(line));
+  assert.ok(headerIndex >= 0, '根 README 缺少脚本总览表格（表头需包含「脚本」列）');
+  const header = tableCells(lines[headerIndex]);
+  const nameColumn = header.indexOf('脚本');
+  const versionColumn = header.indexOf('版本');
+  assert.ok(versionColumn >= 0, '根 README 脚本总览表头缺少「版本」列');
+  const versions = new Map();
+  for (let index = headerIndex + 1; index < lines.length; index++) {
+    const line = lines[index];
+    if (!line.startsWith('|')) break;
+    if (/^\|[\s:|-]+$/.test(line)) continue; // 表头分隔行
+    const row = tableCells(line);
+    if (row[nameColumn]) versions.set(row[nameColumn], row[versionColumn] ?? '');
+  }
+  return versions;
+}
+
+// 根 README 的版本列必须与各脚本 @version 一致，避免升版本后文档悄悄过期
+export function checkReadmeVersions(readme, scriptVersions) {
+  const listed = readmeScriptVersions(readme);
+  for (const [script, version] of scriptVersions) {
+    assert.ok(listed.has(script), `根 README 脚本总览缺少 ${script} 行`);
+    assert.ok(listed.get(script) === version,
+      `根 README 中 ${script} 的版本为 ${listed.get(script)}，与 @version ${version} 不一致`);
+  }
+}
+
 export function validateScript(source, changelog, previousSource = null, previousChangelog = '') {
   const { fields, body } = metadata(source);
   for (const field of ['name', 'namespace', 'version', 'description', 'author', 'match', 'run-at', 'license', 'icon']) {
@@ -143,11 +175,21 @@ function plan() {
   assert.match(read('LICENSE'), /^MIT License/m, '根 LICENSE 必须为 MIT');
   const scripts = discoverScripts();
   assert.ok(scripts.length, '仓库中没有找到脚本目录');
-  for (const row of read('README.md').split(/\r?\n/).filter(line => line.startsWith('|'))) {
+  const readme = read('README.md');
+  for (const row of readme.split(/\r?\n/).filter(line => line.startsWith('|'))) {
     for (const match of row.matchAll(/\(\.\/([^/]+)\/\)/g)) {
       assert.ok(scripts.includes(match[1]), `根 README 引用了不存在的脚本目录：${match[1]}`);
     }
   }
+  const scriptVersions = new Map();
+  for (const script of scripts) {
+    const sourcePath = `${script}/${script}.user.js`;
+    if (!existsSync(sourcePath)) continue; // 只保留文档的目录不参与版本比对
+    const version = metadata(read(sourcePath)).fields.get('version')?.[0];
+    assert.ok(version, `${script} 缺少 @version`);
+    scriptVersions.set(script, version);
+  }
+  checkReadmeVersions(readme, scriptVersions);
   const event = process.env.GITHUB_EVENT_PATH ? JSON.parse(read(process.env.GITHUB_EVENT_PATH)) : {};
   const range = eventRange(process.env.GITHUB_EVENT_NAME, event);
   // 首次推送、手动或本地运行执行全量；基线缺失时显式失败，避免静默漏检。

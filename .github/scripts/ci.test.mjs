@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compareVersions, discoverScripts, selectScripts, validateScript } from './ci.mjs';
+import { checkReadmeVersions, compareVersions, discoverScripts, readmeScriptVersions, selectScripts, validateScript } from './ci.mjs';
 
 const scripts = ['auto-linkify', 'pr-comments-expander', 'url-replace'];
 const source = `// ==UserScript==
@@ -111,7 +111,13 @@ test('实际 Git 事件按整体差异选择脚本，支持拆分提交、首次
     git('config', 'user.email', 'ci@example.invalid');
     git('config', 'core.autocrlf', 'false');
     write('LICENSE', 'MIT License\n');
-    write('README.md', '| 示例 | [目录](./example/) | [安装](https://greasyfork.org/zh-CN/scripts/1) |\n');
+    write('README.md', [
+      '| 脚本 | 版本 | 路径 | GreasyFork |',
+      '|------|------|------|-----------|',
+      '| example | 1.0.0 | [目录](./example/) | [安装](https://greasyfork.org/zh-CN/scripts/1) |',
+      '| another | 1.0.0 | [目录](./another/) | [安装](https://greasyfork.org/zh-CN/scripts/2) |',
+      '',
+    ].join('\n'));
     for (const script of ['example', 'another']) {
       mkdirSync(join(root, script));
       write(`${script}/${script}.user.js`, source);
@@ -127,9 +133,33 @@ test('实际 Git 事件按整体差异选择脚本，支持拆分提交、首次
     const codeCommit = git('rev-parse', 'HEAD');
     write('example/example.user.js', source.replace('1.0.0', '1.0.1').replace("'example'", "'changed'"));
     write('example/CHANGELOG.md', changelog('1.0.1'));
+    // 版本升级后同步根 README 的版本列，plan 才算通过
+    write('README.md', [
+      '| 脚本 | 版本 | 路径 | GreasyFork |',
+      '|------|------|------|-----------|',
+      '| example | 1.0.1 | [目录](./example/) | [安装](https://greasyfork.org/zh-CN/scripts/1) |',
+      '| another | 1.0.0 | [目录](./another/) | [安装](https://greasyfork.org/zh-CN/scripts/2) |',
+      '',
+    ].join('\n'));
     git('add', 'example');
     git('commit', '-m', '升级版本');
     const head = git('rev-parse', 'HEAD');
+    // 根 README 版本列写错时 plan 直接失败
+    write('README.md', [
+      '| 脚本 | 版本 | 路径 |',
+      '|------|------|------|',
+      '| example | 9.9.9 | [目录](./example/) |',
+      '| another | 1.0.0 | [目录](./another/) |',
+      '',
+    ].join('\n'));
+    assert.throws(() => runPlan('workflow_dispatch', {}), error => /不一致/.test(String(error.stderr)));
+    write('README.md', [
+      '| 脚本 | 版本 | 路径 | GreasyFork |',
+      '|------|------|------|-----------|',
+      '| example | 1.0.1 | [目录](./example/) | [安装](https://greasyfork.org/zh-CN/scripts/1) |',
+      '| another | 1.0.0 | [目录](./another/) | [安装](https://greasyfork.org/zh-CN/scripts/2) |',
+      '',
+    ].join('\n'));
     const pr = runPlan('pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } });
     assert.deepEqual(JSON.parse(pr.scripts), ['example']);
     assert.equal(pr['version-base'], base);
@@ -154,6 +184,12 @@ test('实际 Git 事件按整体差异选择脚本，支持拆分提交、首次
     assert.ok(discoverScripts(root).includes('another'), '误删脚本但保留文档时仍需检查');
     git('rm', '-r', 'another');
     git('commit', '-m', '删除完整脚本目录');
+    write('README.md', [
+      '| 脚本 | 版本 | 路径 | GreasyFork |',
+      '|------|------|------|-----------|',
+      '| example | 1.0.1 | [目录](./example/) | [安装](https://greasyfork.org/zh-CN/scripts/1) |',
+      '',
+    ].join('\n'));
     const deleted = runPlan('push', { before: head, after: git('rev-parse', 'HEAD') });
     assert.equal(deleted['has-scripts'], 'false');
     assert.deepEqual(JSON.parse(deleted.scripts), []);
@@ -163,4 +199,14 @@ test('实际 Git 事件按整体差异选择脚本，支持拆分提交、首次
     assert.ok(basename(target).startsWith('userscript-ci-'));
     rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
+});
+
+test('根 README 版本列解析并与脚本 @version 比对', () => {
+  const table = (rows) => ['| 脚本 | 版本 | 说明 |', '|------|------|------|',
+    ...rows.map(row => '| ' + row[0] + ' | ' + row[1] + ' | 示例 |')].join('\n');
+  assert.equal(readmeScriptVersions(table([['example', '1.0.0']])).get('example'), '1.0.0');
+  assert.doesNotThrow(() => checkReadmeVersions(table([['example', '1.0.0']]), new Map([['example', '1.0.0']])));
+  assert.throws(() => checkReadmeVersions(table([['example', '1.0.0']]), new Map([['example', '1.0.1']])), /不一致/);
+  assert.throws(() => checkReadmeVersions(table([['example', '1.0.0']]), new Map([['other', '1.0.0']])), /缺少/);
+  assert.throws(() => readmeScriptVersions('| 脚本 | 说明 |\n|---|---|\n| a | b |'), /版本/);
 });
