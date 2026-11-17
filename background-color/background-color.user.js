@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.6.0
+// @version      0.6.1
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -997,8 +997,25 @@
     return ok;
   }
 
+  // 兜底报告：样式与选择器采集失败时只保留页面地址与 HTML，保证任何页面都有输出
+  function buildFallbackReport(el) {
+    const html = (el && el.outerHTML) || '';
+    return [
+      '【背景色脚本 · 页面元素信息】（简版：完整采集失败）',
+      '页面：' + location.href,
+      'HTML：' + html.replace(/\s+/g, ' ').slice(0, 600),
+    ].join('\n');
+  }
+
   async function copyElementReport(el) {
-    const report = buildElementReport(el);
+    let report;
+    try {
+      report = buildElementReport(el);
+    } catch (err) {
+      // 异常 DOM（detached 节点、样式对象异常等）不应中断整个复制流程
+      console.warn('[background-color] 元素信息采集失败，退回简版报告', err);
+      report = buildFallbackReport(el);
+    }
     const ok = await copyText(report);
     if (ok) {
       alert('已复制元素信息，可直接粘贴用于反馈。');

@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.6.1] - 2026-11-17
+
+### Fixed
+
+- 「复制页面元素」的元素信息采集加了兜底：遇到取样式或几何信息抛错的异常 DOM（detached 节点等）时，改为复制简版报告（页面地址 + HTML 片段）并把原始错误打到控制台，不再整条复制流程中断。
+
 ## [0.6.0] - 2026-11-17
 
 ### Added
