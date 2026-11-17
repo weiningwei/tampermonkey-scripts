@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.7.1
+// @version      0.7.2
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -184,8 +184,11 @@
   }
 
   // 站点异步渲染或 SPA 切换后布局容器可能变化，重新清理一次
-  function rescanBackground() {
+  // force 为 true（路由切换）时无条件重扫；否则仅在观察到 DOM 新增节点后重扫，避免重复全量扫描
+  function rescanBackground(force) {
     if (!currentColor) return;
+    if (!force && !domDirty) return;
+    domDirty = false;
     clearCoveringBackgrounds();
     clearLightBackgrounds(document.body);
   }
@@ -279,6 +282,8 @@
   let lightObserver = null;
   let pendingNodes = new Set();
   let pendingScanTimer = null;
+  // 上次全量扫描以来是否出现过值得重扫的 DOM 变化（脚本自身 UI 除外）
+  let domDirty = true;
 
   function scheduleLightScan(node) {
     pendingNodes.add(node);
@@ -297,7 +302,12 @@
       if (!currentColor) return;
       for (const m of mutations) {
         for (const node of m.addedNodes) {
-          if (node.nodeType === 1) scheduleLightScan(node);
+          if (node.nodeType !== 1) continue;
+          // 脚本自己的面板、浮动按钮、选取高亮不构成重扫理由
+          if (node === panel || node === fab || node === pickHighlight
+            || panel.contains(node) || fab.contains(node)) continue;
+          domDirty = true;
+          scheduleLightScan(node);
         }
       }
     });
@@ -321,23 +331,25 @@
     if (!color) {
       for (const el of Array.from(touchStyles.keys())) restoreInline(el);
       stopLightObserver();
+      domDirty = false;
       return;
     }
     paintBase(color);
     clearCoveringBackgrounds();
     clearLightBackgrounds(document.body);
+    domDirty = false;
     startLightObserver();
   }
 
   // 监听 SPA 路由变化，切换页面后重新清理
   function watchRouteChange() {
-    window.addEventListener('popstate', rescanBackground);
-    window.addEventListener('hashchange', rescanBackground);
+    window.addEventListener('popstate', () => rescanBackground(true));
+    window.addEventListener('hashchange', () => rescanBackground(true));
     for (const method of ['pushState', 'replaceState']) {
       const original = history[method];
       history[method] = function (...args) {
         const result = original.apply(this, args);
-        rescanBackground();
+        rescanBackground(true);
         return result;
       };
     }
@@ -1092,8 +1104,8 @@
       // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
       // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
       watchRouteChange();
-      window.addEventListener('load', rescanBackground, { once: true });
-      setTimeout(rescanBackground, 1200);
+      window.addEventListener('load', () => rescanBackground(), { once: true });
+      setTimeout(() => rescanBackground(), 1200);
     }
     GM_registerMenuCommand('更换背景色', () => togglePanel('menu'));
   }
