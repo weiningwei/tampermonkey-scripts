@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.8.0
+// @version      0.9.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -872,6 +872,53 @@
     }
   }
 
+  // 全屏播放：站点调用 Fullscreen API，或用固定定位的「网页全屏」把播放器铺满视口，
+  // 两种情况下浮动按钮都会压在画面上，进入全屏即隐藏，退出后恢复
+  function isNativeFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  // 「网页全屏」不走 Fullscreen API（B 站等），只能按正在播放的视频是否铺满视口判断
+  function isVideoFillingViewport() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    for (const video of document.getElementsByTagName('video')) {
+      if (video.paused || video.ended || video.readyState < 2) continue;
+      const rect = video.getBoundingClientRect();
+      if (rect.width >= vw * 0.95 && rect.height >= vh * 0.95) return true;
+    }
+    return false;
+  }
+
+  const isPlayerFullscreen = () => isNativeFullscreen() || isVideoFillingViewport();
+
+  // 进入全屏播放时收起面板并隐藏浮动按钮；退出后按白名单状态恢复
+  function refreshFabForPlayback() {
+    if (isPlayerFullscreen()) {
+      panel.style.display = 'none';
+      setFabVisible(false);
+      return;
+    }
+    setFabVisible(!isCurrentHostWhitelisted());
+  }
+
+  let playbackCheckTimer = 0;
+  function schedulePlaybackCheck() {
+    clearTimeout(playbackCheckTimer);
+    playbackCheckTimer = setTimeout(refreshFabForPlayback, 200);
+  }
+
+  // Fullscreen API 事件 + 视频播放状态与窗口尺寸变化（「网页全屏」常伴随 resize）
+  function watchPlaybackState() {
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((type) => {
+      document.addEventListener(type, refreshFabForPlayback);
+    });
+    ['playing', 'pause', 'ended', 'loadedmetadata'].forEach((type) => {
+      document.addEventListener(type, schedulePlaybackCheck, true);
+    });
+    window.addEventListener('resize', schedulePlaybackCheck);
+  }
+
   // 加入白名单：本页立即停用，刷新后该域名下脚本完全不加载
   function addCurrentHostToWhitelist() {
     if (!currentHost || isCurrentHostWhitelisted()) return;
@@ -1131,10 +1178,12 @@
     if (!document.body) return;
     injectUiStyles();
     document.body.appendChild(panel);
+    // 全屏播放检测对所有站点生效：白名单站点后续移出白名单时也能立刻响应
+    watchPlaybackState();
     // 白名单站点：不上色、不显示浮动按钮、不挂观察器；仅保留菜单入口，便于在此页移出白名单
     if (!isCurrentHostWhitelisted()) {
       applyColor(currentColor);
-      setFabVisible(true);
+      setFabVisible(!isPlayerFullscreen());
       // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
       // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
       watchRouteChange();

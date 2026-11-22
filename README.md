@@ -9,7 +9,7 @@
 | auto-linkify | 1.5.4 | 自动将网页文本中的 URL 转为可点击链接，支持动态内容 | [`auto-linkify/`](./auto-linkify/) | [安装](https://greasyfork.org/zh-CN/scripts/587142-auto-linkify-%E7%BD%91%E9%A1%B5%E6%96%87%E6%9C%AC%E8%BD%AC%E9%93%BE%E6%8E%A5) |
 | url-replace | 0.19.5 | 网址包含指定字符串时替换并新标签页打开 | [`url-replace/`](./url-replace/) | [安装](https://greasyfork.org/zh-CN/scripts/593213-url-replace-%E7%BD%91%E5%9D%80%E6%9B%BF%E6%8D%A2%E6%96%B0%E6%A0%87%E7%AD%BE%E6%89%93%E5%BC%80) |
 | pr-comments-expander | 0.3.6 | GitCode / AtomGit 的 PR 页面自动展开被折叠的评论 | [`pr-comments-expander/`](./pr-comments-expander/) | [安装](https://greasyfork.org/zh-CN/scripts/593763-pr-comments-expander-pr-%E8%AF%84%E8%AE%BA%E5%85%A8%E9%83%A8%E5%B1%95%E5%BC%80) |
-| background-color | 0.8.0 | 网页背景色一键切换：预设护眼配色与自定义 RGB 颜色（实时预览） | [`background-color/`](./background-color/) | [安装](https://greasyfork.org/zh-CN/scripts/605797-background-color-%E7%BD%91%E9%A1%B5%E8%83%8C%E6%99%AF%E8%89%B2%E8%87%AA%E5%AE%9A%E4%B9%89) |
+| background-color | 0.9.0 | 网页背景色一键切换：预设护眼配色与自定义 RGB 颜色（实时预览） | [`background-color/`](./background-color/) | [安装](https://greasyfork.org/zh-CN/scripts/605797-background-color-%E7%BD%91%E9%A1%B5%E8%83%8C%E6%99%AF%E8%89%B2%E8%87%AA%E5%AE%9A%E4%B9%89) |
 | auto-redirect | 0.1.0 | 跳过平台外链提醒页（继续访问提示），自动直达目标网址 | [`auto-redirect/`](./auto-redirect/) | [安装](https://greasyfork.org/zh-CN/scripts/605804-auto-redirect-%E5%A4%96%E9%93%BE%E7%9B%B4%E8%BE%BE) |
 
 > 「版本」列为脚本头部 `@version` 的当前值，与各脚本 `CHANGELOG.md` 的最新条目一致。
