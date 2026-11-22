@@ -4,6 +4,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.8.0] - 2026-11-17
+
+### Added
+
+- 「当前站点」区新增「复制整页」：把当前页面的完整 HTML（`<!DOCTYPE html>` + `document.documentElement.outerHTML`，含脚本注入的面板与样式，不做截断）复制到剪贴板，便于反馈整页布局问题；复制失败时回退到控制台并提示。
+
 ## [0.7.3] - 2026-11-17
 
 ### Changed

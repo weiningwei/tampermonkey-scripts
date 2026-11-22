@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.7.3
+// @version      0.8.0
 // @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
 // @author       weiningwei
 // @match        *://*/*
@@ -526,7 +526,12 @@
   copyBtn.textContent = '复制页面元素';
   copyBtn.title = '进入选取模式：点击页面上效果异常的元素，复制其选择器、尺寸、计算样式与 HTML 片段';
   copyBtn.className = 'pbg-site-btn';
-  copyRow.appendChild(copyBtn);
+  const copyPageBtn = document.createElement('button');
+  copyPageBtn.type = 'button';
+  copyPageBtn.textContent = '复制整页';
+  copyPageBtn.title = '把当前页面的完整 HTML（含脚本注入的面板与样式）复制到剪贴板，便于反馈整体布局问题';
+  copyPageBtn.className = 'pbg-site-btn';
+  copyRow.append(copyBtn, copyPageBtn);
 
   const siteList = document.createElement('div');
   siteList.className = 'pbg-site-list';
@@ -970,6 +975,21 @@
   }
 
   copyBtn.addEventListener('click', startPickMode);
+
+  // 复制整页：整个 documentElement 的 HTML，不做截断，便于把整页结构贴出来分析
+  async function copyWholePage() {
+    const doctype = document.doctype ? '<!DOCTYPE ' + document.doctype.name + '>\n' : '';
+    const html = doctype + document.documentElement.outerHTML;
+    const ok = await copyText(html);
+    if (ok) {
+      alert('已复制整页 HTML（约 ' + Math.max(1, Math.round(html.length / 1024)) + ' KB）。');
+    } else {
+      console.log(html);
+      alert('复制失败，整页 HTML 已输出到控制台（F12 → Console）。');
+    }
+  }
+
+  copyPageBtn.addEventListener('click', copyWholePage);
 
   // 类名转义：CSS.escape 不可用时退回手写转义
   function escapeIdent(text) {
