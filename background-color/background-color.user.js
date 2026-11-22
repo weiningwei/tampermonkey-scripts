@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Background Color（网页背景色自定义）
 // @namespace    https://github.com/weiningwei/tampermonkey-scripts
-// @version      0.9.0
-// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，并能复制页面元素信息用于反馈。
+// @version      0.10.0
+// @description  一键把网页背景换成预设或自定义颜色；自定义支持 R/G/B 三通道输入并实时预览，配色可保存复用，全局持久化，可随时恢复网页默认背景或重置全部设置；效果不佳的站点可加入白名单停用，能复制页面元素信息用于反馈；浮动按钮可隐藏，从油猴菜单随时恢复。
 // @author       weiningwei
 // @match        *://*/*
 // @run-at       document-idle
@@ -41,6 +41,7 @@
   const STORAGE_CUSTOM_KEY = 'background-color.customColors'; // 自定义颜色列表（#rrggbb 数组）
   const FAB_POS_KEY = 'background-color.fabPos'; // 浮动按钮拖动后的位置（右下锚定）
   const STORAGE_WHITELIST_KEY = 'background-color.whitelist'; // 站点白名单（hostname 数组，不含 path）
+  const STORAGE_FAB_HIDDEN_KEY = 'background-color.fabHidden'; // 用户手动隐藏浮动按钮（true 时不显示，可从油猴菜单恢复）
 
   const PANEL_ID = 'background-color-panel';
   const UI_STYLE_ID = 'background-color-ui-style';
@@ -101,6 +102,7 @@
   let currentColor = loadCurrentColor();
   let customColors = loadCustomColors();
   let whitelist = loadWhitelist();
+  let fabHiddenByUser = GM_getValue(STORAGE_FAB_HIDDEN_KEY, false) === true;
   // 白名单只比对 hostname：同一域名下所有 path 一起生效/停用
   const currentHost = (location.hostname || '').toLowerCase();
   const isCurrentHostWhitelisted = () => whitelist.includes(currentHost);
@@ -549,7 +551,12 @@
   resetAllBtn.textContent = '重置全部设置';
   resetAllBtn.title = '恢复网页默认背景，并清除所有自定义颜色与浮动按钮位置（不可撤销）';
   resetAllBtn.className = 'pbg-reset-all';
-  footer.append(footerHint, resetAllBtn);
+  const hideFabBtn = document.createElement('button');
+  hideFabBtn.type = 'button';
+  hideFabBtn.textContent = '隐藏浮动按钮';
+  hideFabBtn.title = '隐藏页面右下角的浮动按钮，之后可通过油猴菜单「显示浮动按钮」恢复';
+  hideFabBtn.className = 'pbg-site-btn';
+  footer.append(footerHint, hideFabBtn, resetAllBtn);
 
   panel.append(header, presetSection, customSection, formSection, siteSection, footer);
 
@@ -892,14 +899,22 @@
 
   const isPlayerFullscreen = () => isNativeFullscreen() || isVideoFillingViewport();
 
-  // 进入全屏播放时收起面板并隐藏浮动按钮；退出后按白名单状态恢复
+  // 浮动按钮的最终可见性：白名单停用、用户手动隐藏、全屏播放三者任一成立即隐藏
+  function updateFabVisibility() {
+    setFabVisible(!isCurrentHostWhitelisted() && !fabHiddenByUser && !isPlayerFullscreen());
+  }
+
+  // 手动隐藏/恢复浮动按钮，状态全局持久化；隐藏后仍可通过油猴菜单重新显示
+  function setFabHidden(hidden) {
+    fabHiddenByUser = hidden;
+    GM_setValue(STORAGE_FAB_HIDDEN_KEY, hidden);
+    updateFabVisibility();
+  }
+
+  // 进入全屏播放时收起面板并隐藏浮动按钮；退出后按白名单与手动隐藏状态恢复
   function refreshFabForPlayback() {
-    if (isPlayerFullscreen()) {
-      panel.style.display = 'none';
-      setFabVisible(false);
-      return;
-    }
-    setFabVisible(!isCurrentHostWhitelisted());
+    if (isPlayerFullscreen()) panel.style.display = 'none';
+    updateFabVisibility();
   }
 
   let playbackCheckTimer = 0;
@@ -925,7 +940,7 @@
     whitelist.push(currentHost);
     saveWhitelist(whitelist);
     applyColor(null); // 立即还原被脚本改动过的样式
-    setFabVisible(false);
+    updateFabVisibility();
     renderSiteSection();
     alert(currentHost + ' 已加入白名单：本页背景已还原，刷新后该域名下不再加载脚本。');
   }
@@ -936,7 +951,7 @@
     saveWhitelist(whitelist);
     if (host === currentHost) {
       applyColor(currentColor);
-      setFabVisible(true);
+      updateFabVisibility();
     }
     renderSiteSection();
   }
@@ -1138,24 +1153,33 @@
 
   // 重置全部设置：恢复网页默认背景，并清空当前颜色、自定义颜色与浮动按钮位置
   function resetAllSettings() {
-    const confirmed = confirm('重置全部设置会恢复网页默认背景、删除所有自定义颜色、清空站点白名单并还原浮动按钮位置。此操作不可撤销，确定继续？');
+    const confirmed = confirm('重置全部设置会恢复网页默认背景、删除所有自定义颜色、清空站点白名单，并还原浮动按钮的位置与显示状态。此操作不可撤销，确定继续？');
     if (!confirmed) return;
     customColors = [];
     saveCustomColors(customColors);
     whitelist = [];
     saveWhitelist(whitelist);
     GM_setValue(FAB_POS_KEY, null);
+    fabHiddenByUser = false;
+    GM_setValue(STORAGE_FAB_HIDDEN_KEY, false);
     // 清掉 setFabPos 写入的内联定位，浮动按钮回到样式表里的默认位置
     ['right', 'bottom', 'left', 'top'].forEach((prop) => fab.style.removeProperty(prop));
     channelInputs.forEach((input) => { input.value = ''; });
     hexInput.value = '';
     setCurrentColor(null); // 内部会还原内联样式并重渲色板
     syncPreview();
-    setFabVisible(true);
+    updateFabVisibility();
     renderSiteSection();
   }
 
   resetAllBtn.addEventListener('click', resetAllSettings);
+
+  // 面板内隐藏浮动按钮：状态持久化，需要时从油猴菜单「显示浮动按钮」恢复
+  hideFabBtn.addEventListener('click', () => {
+    setFabHidden(true);
+    panel.style.display = 'none';
+    alert('浮动按钮已隐藏，可通过油猴菜单「显示浮动按钮」恢复。');
+  });
 
   // 点击浮动按钮开/关面板（拖动结束后的 click 已被上面的抑制器拦截）
   fab.addEventListener('click', () => togglePanel('fab'));
@@ -1183,7 +1207,7 @@
     // 白名单站点：不上色、不显示浮动按钮、不挂观察器；仅保留菜单入口，便于在此页移出白名单
     if (!isCurrentHostWhitelisted()) {
       applyColor(currentColor);
-      setFabVisible(!isPlayerFullscreen());
+      updateFabVisibility();
       // 异步渲染的站点稍后才生成整页布局容器，加载完成后再清理一次；
       // SPA 路由切换后同样重扫（未选颜色时 rescanBackground 自身直接返回）
       watchRouteChange();
@@ -1191,6 +1215,8 @@
       setTimeout(() => rescanBackground(), 1200);
     }
     GM_registerMenuCommand('更换背景色', () => togglePanel('menu'));
+    GM_registerMenuCommand('隐藏浮动按钮', () => setFabHidden(true));
+    GM_registerMenuCommand('显示浮动按钮', () => setFabHidden(false));
   }
 
   if (document.readyState === 'loading') {
